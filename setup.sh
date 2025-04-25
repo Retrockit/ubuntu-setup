@@ -598,7 +598,7 @@ install_neovim() {
     log "Setting up kickstart.nvim for user ${current_user}"
     
     # Clone kickstart.nvim repository
-    su -l "${current_user}" -c "git clone https://github.com/nvim-lua/kickstart.nvim.git \"\${XDG_CONFIG_HOME:-\$HOME/.config}/nvim\""
+    su -l "${current_user}" -c "git clone https://github.com/nvim-lua/kickstart.nvim.git ~/.config/nvim"
     
     if [ -d "${nvim_config_dir}" ] && [ -f "${nvim_config_dir}/init.lua" ]; then
       log "kickstart.nvim configured successfully"
