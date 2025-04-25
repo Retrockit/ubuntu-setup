@@ -44,7 +44,6 @@ readonly DEV_PACKAGES=(
  "git"
  "python3" 
  "python3-pip"
- "neovim"
 )
 
 # Pyenv build dependencies
@@ -545,6 +544,50 @@ install_mise() {
 }
 
 #######################################
+# Install Neovim from unstable PPA for kickstart.nvim
+# Globals:
+#   None
+# Arguments:
+#   None
+#######################################
+install_neovim() {
+  # Check if Neovim is already installed from the PPA
+  if command_exists nvim && grep -q "neovim-ppa/unstable" /etc/apt/sources.list.d/* 2>/dev/null; then
+    log "Neovim (unstable) is already installed"
+    return 0
+  fi
+  
+  log "Installing Neovim from unstable PPA for kickstart.nvim compatibility"
+  
+  # Add the Neovim unstable PPA
+  log "Adding Neovim unstable PPA"
+  if ! add-apt-repository ppa:neovim-ppa/unstable -y; then
+    err "Failed to add Neovim unstable PPA"
+  fi
+  
+  # Update package lists
+  log "Updating package lists"
+  if ! apt-get update; then
+    err "Failed to update package lists"
+  fi
+  
+  # Install Neovim and dependencies
+  log "Installing Neovim and dependencies"
+  if ! apt-get install -y make gcc ripgrep unzip git xclip neovim; then
+    err "Failed to install Neovim and dependencies"
+  fi
+  
+  # Check installation
+  if command_exists nvim; then
+    local nvim_version
+    nvim_version=$(nvim --version | head -n 1)
+    log "Neovim installed successfully: ${nvim_version}"
+  else
+    err "Neovim installation failed"
+  fi
+}
+
+#######################################
 # Install latest Podman from source
 # Globals:
 #   PODMAN_VERSION
@@ -1001,6 +1044,10 @@ main() {
  # Install development packages
  log "Installing development packages"
  install_packages "${DEV_PACKAGES[@]}"
+
+ 
+ # Install Neovim from unstable PPA
+ install_neovim
  
  # Install utility packages
  log "Installing utility packages"
