@@ -551,39 +551,60 @@ install_mise() {
 #   None
 #######################################
 install_neovim() {
+  local current_user
+  current_user=$(logname 2>/dev/null || echo "${SUDO_USER:-$USER}")
+  
   # Check if Neovim is already installed from the PPA
   if command_exists nvim && grep -q "neovim-ppa/unstable" /etc/apt/sources.list.d/* 2>/dev/null; then
     log "Neovim (unstable) is already installed"
-    return 0
-  fi
-  
-  log "Installing Neovim from unstable PPA for kickstart.nvim compatibility"
-  
-  # Add the Neovim unstable PPA
-  log "Adding Neovim unstable PPA"
-  if ! add-apt-repository ppa:neovim-ppa/unstable -y; then
-    err "Failed to add Neovim unstable PPA"
-  fi
-  
-  # Update package lists
-  log "Updating package lists"
-  if ! apt-get update; then
-    err "Failed to update package lists"
-  fi
-  
-  # Install Neovim and dependencies
-  log "Installing Neovim and dependencies"
-  if ! apt-get install -y make gcc ripgrep unzip git xclip neovim; then
-    err "Failed to install Neovim and dependencies"
-  fi
-  
-  # Check installation
-  if command_exists nvim; then
-    local nvim_version
-    nvim_version=$(nvim --version | head -n 1)
-    log "Neovim installed successfully: ${nvim_version}"
   else
-    err "Neovim installation failed"
+    log "Installing Neovim from unstable PPA for kickstart.nvim compatibility"
+    
+    # Add the Neovim unstable PPA
+    log "Adding Neovim unstable PPA"
+    if ! add-apt-repository ppa:neovim-ppa/unstable -y; then
+      err "Failed to add Neovim unstable PPA"
+    fi
+    
+    # Update package lists
+    log "Updating package lists"
+    if ! apt-get update; then
+      err "Failed to update package lists"
+    fi
+    
+    # Install Neovim and dependencies
+    log "Installing Neovim and dependencies"
+    if ! apt-get install -y make gcc ripgrep unzip git xclip neovim; then
+      err "Failed to install Neovim and dependencies"
+    fi
+    
+    # Check installation
+    if command_exists nvim; then
+      local nvim_version
+      nvim_version=$(nvim --version | head -n 1)
+      log "Neovim installed successfully: ${nvim_version}"
+    else
+      err "Neovim installation failed"
+    fi
+  fi
+  
+  # Set up kickstart.nvim configuration
+  local nvim_config_dir="/home/${current_user}/.config/nvim"
+  
+  # Check if kickstart.nvim is already set up
+  if [ -d "${nvim_config_dir}" ] && [ -f "${nvim_config_dir}/init.lua" ]; then
+    log "kickstart.nvim configuration already exists"
+  else
+    log "Setting up kickstart.nvim for user ${current_user}"
+    
+    # Clone kickstart.nvim repository
+    su -l "${current_user}" -c "git clone https://github.com/nvim-lua/kickstart.nvim.git \"\${XDG_CONFIG_HOME:-\$HOME/.config}/nvim\""
+    
+    if [ -d "${nvim_config_dir}" ] && [ -f "${nvim_config_dir}/init.lua" ]; then
+      log "kickstart.nvim configured successfully"
+    else
+      log "Warning: kickstart.nvim configuration may have failed, please check manually"
+    fi
   fi
 }
 
