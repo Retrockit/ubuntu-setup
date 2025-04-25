@@ -445,6 +445,49 @@ install_jetbrains_toolbox() {
 }
 
 #######################################
+# Install Google Chrome Beta
+# Globals:
+#   None
+# Arguments:
+#   None
+#######################################
+install_chrome_beta() {
+  local chrome_deb="/tmp/google-chrome-beta_current_amd64.deb"
+  
+  # Check if Chrome Beta is already installed
+  if package_installed "google-chrome-beta"; then
+    log "Google Chrome Beta is already installed"
+    return 0
+  fi
+  
+  log "Installing Google Chrome Beta"
+  
+  # Download the latest Chrome Beta package
+  log "Downloading Google Chrome Beta package"
+  if ! wget -q -O "${chrome_deb}" "https://dl.google.com/linux/direct/google-chrome-beta_current_amd64.deb"; then
+    err "Failed to download Google Chrome Beta package"
+  fi
+  
+  # Install the package
+  log "Installing Google Chrome Beta package"
+  if ! dpkg -i "${chrome_deb}"; then
+    # If there are dependency issues, try to fix them
+    log "Fixing dependencies"
+    apt-get install -f -y
+    
+    # Try the installation again
+    if ! dpkg -i "${chrome_deb}"; then
+      err "Failed to install Google Chrome Beta package"
+    fi
+  fi
+  
+  # Clean up the downloaded package
+  rm -f "${chrome_deb}"
+  
+  log "Google Chrome Beta installed successfully"
+}
+
+#######################################
 # Install mise for the current user
 # Globals:
 #   MISE_INSTALLER
@@ -968,6 +1011,9 @@ main() {
  
  # Install JetBrains Toolbox
  install_jetbrains_toolbox
+
+ # Install Google Chrome Beta
+ install_chrome_beta
  
  # Install Flatpak
  install_flatpak
