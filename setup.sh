@@ -872,8 +872,10 @@ EOF
 #######################################
 prompt_for_restart() {
   if [[ "${AUTO_MODE}" == "true" ]]; then
-    log "Running in automatic mode. System will not be restarted automatically."
-    log "Please restart your system manually when convenient."
+    log "Running in automatic mode. System will restart in 10 seconds."
+    log "Press Ctrl+C to cancel restart."
+    sleep 10
+    reboot
     return 0
   fi
   
