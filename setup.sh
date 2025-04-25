@@ -1007,10 +1007,10 @@ main() {
  log "- Default shell change to fish"
  log "Alternatively, run 'newgrp docker' for Docker group and 'exec fish' to start using fish shell immediately"
  log "To launch JetBrains Toolbox, run 'jetbrains-toolbox' as your normal user (not as root)"
-}
 
-# Prompt for restart
+ # Prompt for restart
   prompt_for_restart
+}
 
 # Execute main function
 main "$@"
