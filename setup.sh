@@ -274,12 +274,8 @@ function install_snap_apps() {
     # Ensure snap service is running and enabled
     log "Ensuring snap service is running and enabled"
     systemctl enable --now snapd.service
-  fi
-  
-  # Ensure core snap is up to date
-  log "Updating core snap"
-  if ! snap refresh core; then
-    log "Warning: Failed to refresh core snap. Continuing anyway."
+  else
+    log "Snapd is already installed and available"
   fi
   
   # Install each app in the SNAP_APPS array
