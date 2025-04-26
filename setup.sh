@@ -648,8 +648,6 @@ EOF
   
   log "Neovim aliases have been set up successfully"
 }
-  
-}
 
 #######################################
 # Install latest Podman from source
