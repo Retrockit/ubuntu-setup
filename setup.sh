@@ -330,6 +330,8 @@ function install_steam_dependencies() {
     "libgl1-mesa-dri:i386"
     "libgl1:amd64"
     "libgl1:i386"
+    "steam-libs-amd64"
+    "steam-libs-i386:i386"
   )
   
   # Video acceleration and rendering dependencies
