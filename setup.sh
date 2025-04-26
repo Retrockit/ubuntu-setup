@@ -845,6 +845,49 @@ EOF
 }
 
 #######################################
+# Install 1Password
+# Globals:
+#   None
+# Arguments:
+#   None
+#######################################
+install_1password() {
+  local password_deb="/tmp/1password-latest.deb"
+  
+  # Check if 1Password is already installed
+  if package_installed "1password"; then
+    log "1Password is already installed"
+    return 0
+  fi
+  
+  log "Installing 1Password"
+  
+  # Download the latest 1Password package
+  log "Downloading 1Password package"
+  if ! wget -q -O "${password_deb}" "https://downloads.1password.com/linux/debian/amd64/stable/1password-latest.deb"; then
+    err "Failed to download 1Password package"
+  fi
+  
+  # Install the package
+  log "Installing 1Password package"
+  if ! dpkg -i "${password_deb}"; then
+    # If there are dependency issues, try to fix them
+    log "Fixing dependencies"
+    apt-get install -f -y
+    
+    # Try the installation again
+    if ! dpkg -i "${password_deb}"; then
+      err "Failed to install 1Password package"
+    fi
+  fi
+  
+  # Clean up the downloaded package
+  rm -f "${password_deb}"
+  
+  log "1Password installed successfully"
+}
+
+#######################################
 # Install and configure Flatpak
 # Globals:
 #   FLATPAK_PACKAGES
@@ -1228,6 +1271,9 @@ main() {
 
  # Install Google Chrome Beta
  install_chrome_beta
+
+ # Install 1Password
+ install_1password
  
  # Install Flatpak
  install_flatpak
