@@ -76,7 +76,7 @@ readonly UTIL_PACKAGES=(
 
 # List of Snap apps to install
 readonly SNAP_APPS=(
-  # "postman"  # API Development Environment
+    "postman"  # API Development Environment
   # "spotify"  # Music Streaming
   # Add other desired snap packages here
   # "code"   # Example: VS Code (consider conflicts if installing via .deb too)
