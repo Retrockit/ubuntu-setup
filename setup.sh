@@ -1082,16 +1082,10 @@ install_kvm_libvirt() {
   # Install KVM and libvirt packages
   apt-get install -y qemu-kvm libvirt-daemon-system libvirt-clients bridge-utils virt-manager
   
-  # Enable and start the modular daemons
-  log "Enabling and starting libvirt modular daemons"
-  
-  for drv in qemu network nodedev nwfilter secret storage
-  do
-    log "Enabling and starting virt${drv}d modular daemon"
-    systemctl enable virt${drv}d.service
-    systemctl enable virt${drv}d{,-ro,-admin}.socket
-    systemctl start virt${drv}d{,-ro,-admin}.socket
-  done
+  # Enable and start the libvirtd service
+  log "Enabling and starting libvirtd service"
+  systemctl enable libvirtd
+  systemctl start libvirtd
   
   # Add user to the kvm and libvirt groups
   log "Adding user ${current_user} to kvm and libvirt groups"
