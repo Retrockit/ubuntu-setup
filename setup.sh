@@ -1026,7 +1026,7 @@ function install_msty_app() {
   local apps_dir="/home/${current_user}/.local/bin"
   local app_image_path="${apps_dir}/Msty.AppImage"
   local desktop_file_path="/home/${current_user}/.local/share/applications/msty.desktop"
-  local icon_dir="/home/${current_user}/.local/share/icons/hicolor/256x256/apps"
+  local icons_dir="/home/${current_user}/.local/share/icons"
   local msty_url="https://assets.msty.app/prod/latest/linux/amd64/Msty_x86_64_amd64.AppImage"
   
   log "Installing Msty.app"
@@ -1039,63 +1039,46 @@ function install_msty_app() {
   
   # Create necessary directories
   log "Creating application directories"
-  su -l "${current_user}" -c "mkdir -p ${apps_dir}"
-  su -l "${current_user}" -c "mkdir -p $(dirname "${desktop_file_path}")"
-  su -l "${current_user}" -c "mkdir -p ${icon_dir}"
+  mkdir -p "${apps_dir}"
+  mkdir -p "$(dirname "${desktop_file_path}")"
+  mkdir -p "${icons_dir}"
+  
+  # Set proper ownership
+  chown -R "${current_user}:${current_user}" "${apps_dir}"
+  chown -R "${current_user}:${current_user}" "$(dirname "${desktop_file_path}")"
+  chown -R "${current_user}:${current_user}" "${icons_dir}"
   
   # Download Msty AppImage
   log "Downloading Msty.app AppImage"
-  if ! su -l "${current_user}" -c "wget -q --show-progress -O '${app_image_path}' '${msty_url}'"; then
+  if ! su "${current_user}" -c "wget -q --show-progress -O '${app_image_path}' '${msty_url}'"; then
     err "Failed to download Msty.app AppImage"
   fi
   
   # Make the AppImage executable for all users
   log "Making AppImage executable for all users"
-  su -l "${current_user}" -c "chmod a+x '${app_image_path}'"
+  chmod a+x "${app_image_path}"
   
-  # Instead of trying to extract the icon from the AppImage (which is failing),
-  # let's use a generic icon or download one specifically for Msty
-  log "Setting application icon"
-  
-  # Try to use an existing app icon from the system
-  local icon_path="${icon_dir}/msty.png"
-  if [ -f "/usr/share/icons/hicolor/256x256/apps/web-browser.png" ]; then
-    # Use a web browser icon as fallback
-    su -l "${current_user}" -c "cp /usr/share/icons/hicolor/256x256/apps/web-browser.png '${icon_path}'"
-  elif [ -f "/usr/share/icons/gnome/256x256/apps/web-browser.png" ]; then
-    # Alternative location
-    su -l "${current_user}" -c "cp /usr/share/icons/gnome/256x256/apps/web-browser.png '${icon_path}'"
-  else
-    # Create a simple colored square as icon if no suitable icon is found
-    log "No suitable icon found, creating a simple placeholder icon"
-    su -l "${current_user}" -c "cat > '${icon_path}' << 'EOL'
-<svg xmlns='http://www.w3.org/2000/svg' width='256' height='256'>
-  <rect width='256' height='256' fill='#4d4d4d'/>
-  <text x='50%' y='50%' font-size='60' text-anchor='middle' fill='white' font-family='sans-serif' dominant-baseline='middle'>Msty</text>
-</svg>
-EOL"
-    # Rename to .svg extension
-    su -l "${current_user}" -c "mv '${icon_path}' '${icon_dir}/msty.svg'"
-    icon_path="${icon_dir}/msty.svg"
-  fi
-  
-  # Create a desktop file
   log "Creating desktop shortcut"
-  su -l "${current_user}" -c "cat > '${desktop_file_path}' << EOL
+  # Create desktop file directly without redirection
+  cat > "${desktop_file_path}" << EOF
 [Desktop Entry]
 Name=Msty
-Comment=Msty Application
+Comment=Msty Messaging App
 Exec=${app_image_path} --no-sandbox %U
-Icon=${icon_path}
+Icon=web-browser
 Terminal=false
 Type=Application
 Categories=Network;WebBrowser;
 StartupWMClass=Msty
-EOL"
+EOF
+  
+  # Set proper ownership of the desktop file
+  chown "${current_user}:${current_user}" "${desktop_file_path}"
   
   # Update desktop database to recognize the new application
-  log "Updating desktop database"
-  su -l "${current_user}" -c "update-desktop-database ~/.local/share/applications"
+  if command -v update-desktop-database >/dev/null; then
+    su "${current_user}" -c "update-desktop-database ~/.local/share/applications"
+  fi
   
   log "Msty.app has been installed successfully"
   log "You can find it in your application drawer or run it from ${app_image_path}"
