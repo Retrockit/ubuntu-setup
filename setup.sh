@@ -44,6 +44,7 @@ readonly DEV_PACKAGES=(
  "git"
  "python3" 
  "python3-pip"
+ "libreadline-dev"
 )
 
 # Pyenv build dependencies
@@ -662,7 +663,7 @@ install_neovim() {
     
     # Install Neovim and dependencies
     log "Installing Neovim and dependencies"
-    if ! apt-get install -y make gcc ripgrep unzip git xclip neovim; then
+    if ! apt-get install -y make gcc ripgrep unzip git xclip neovim fonts-noto-color-emoji; then
       err "Failed to install Neovim and dependencies"
     fi
     
@@ -735,6 +736,116 @@ EOF
   fi
   
   log "Neovim aliases have been set up successfully"
+}
+
+#######################################
+# Install Lua and LuaRocks from source
+# Globals:
+#   None
+# Arguments:
+#   None
+#######################################
+install_lua_and_luarocks() {
+  local current_user
+  current_user=$(logname 2>/dev/null || echo "${SUDO_USER:-$USER}")
+  local tmp_dir="/tmp/lua_build"
+  local lua_version="5.4.7"
+  local luarocks_version="3.11.1"
+  local lua_tarball="lua-${lua_version}.tar.gz"
+  local luarocks_tarball="luarocks-${luarocks_version}.tar.gz"
+  
+  log "Installing Lua ${lua_version} and LuaRocks ${luarocks_version} from source"
+  
+  # Check if Lua is already installed
+  if command_exists lua && [ "$(lua -v 2>&1 | grep -o "${lua_version}")" = "${lua_version}" ]; then
+    log "Lua ${lua_version} is already installed"
+  else
+    log "Building Lua ${lua_version} from source"
+    
+    # Install build dependencies
+    log "Installing build dependencies"
+    apt-get install -y build-essential libreadline-dev
+    
+    # Create build directory
+    mkdir -p "${tmp_dir}"
+    cd "${tmp_dir}" || err "Failed to enter build directory"
+    
+    # Download Lua source
+    log "Downloading Lua ${lua_version} source"
+    wget -q "https://www.lua.org/ftp/${lua_tarball}" -O "${lua_tarball}"
+    
+    # Extract tarball
+    log "Extracting Lua source"
+    tar -xzf "${lua_tarball}"
+    cd "lua-${lua_version}" || err "Failed to enter Lua source directory"
+    
+    # Build and install Lua
+    log "Building Lua"
+    if ! make all test; then
+      err "Failed to build Lua"
+    fi
+    
+    log "Installing Lua"
+    if ! make install; then
+      err "Failed to install Lua"
+    fi
+    
+    # Verify Lua installation
+    if command_exists lua; then
+      log "Lua $(lua -v 2>&1) installed successfully"
+    else
+      err "Lua installation failed"
+    fi
+  fi
+  
+  # Check if LuaRocks is already installed
+  if command_exists luarocks && luarocks --version | grep -q "${luarocks_version}"; then
+    log "LuaRocks ${luarocks_version} is already installed"
+  else
+    log "Building LuaRocks ${luarocks_version} from source"
+    
+    # Create build directory if not exists
+    mkdir -p "${tmp_dir}"
+    cd "${tmp_dir}" || err "Failed to enter build directory"
+    
+    # Download LuaRocks source
+    log "Downloading LuaRocks ${luarocks_version} source"
+    wget -q "https://luarocks.github.io/luarocks/releases/${luarocks_tarball}" -O "${luarocks_tarball}"
+    
+    # Extract tarball
+    log "Extracting LuaRocks source"
+    tar -xzf "${luarocks_tarball}"
+    cd "luarocks-${luarocks_version}" || err "Failed to enter LuaRocks source directory"
+    
+    # Configure, build and install LuaRocks
+    log "Configuring LuaRocks"
+    if ! ./configure --with-lua-include=/usr/local/include; then
+      err "Failed to configure LuaRocks"
+    fi
+    
+    log "Building LuaRocks"
+    if ! make; then
+      err "Failed to build LuaRocks"
+    fi
+    
+    log "Installing LuaRocks"
+    if ! make install; then
+      err "Failed to install LuaRocks"
+    fi
+    
+    # Verify LuaRocks installation
+    if command_exists luarocks; then
+      log "LuaRocks $(luarocks --version) installed successfully"
+    else
+      err "LuaRocks installation failed"
+    fi
+  fi
+  
+  # Clean up build directory
+  log "Cleaning up build files"
+  rm -rf "${tmp_dir}"
+  
+  log "Lua and LuaRocks installation completed successfully"
 }
 
 #######################################
@@ -1357,6 +1468,9 @@ main() {
  
  # Install Neovim from unstable PPA
  install_neovim
+
+ # Install Lua and LuaRocks
+ install_lua_and_luarocks
 
  # Install KVM and libvirt
  install_kvm_libvirt
