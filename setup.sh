@@ -74,6 +74,14 @@ readonly UTIL_PACKAGES=(
  "fish"
 )
 
+# List of Snap apps to install
+readonly SNAP_APPS=(
+  # "postman"  # API Development Environment
+  # "spotify"  # Music Streaming
+  # Add other desired snap packages here
+  # "code"   # Example: VS Code (consider conflicts if installing via .deb too)
+)
+
 # Flatpak packages
 readonly FLATPAK_PACKAGES=(
  "flatpak"
@@ -230,6 +238,104 @@ update_system() {
  if ! apt-get upgrade -y; then
    err "Failed to upgrade system packages"
  fi
+}
+
+#######################################
+# Install snapd if not already installed
+# Globals:
+#   None
+# Arguments:
+#   None
+#######################################
+install_snapd() {
+  if package_installed "snapd"; then
+    log "snapd package is already installed"
+    return 0
+  fi
+
+  log "Installing snapd"
+  if ! apt-get install -y snapd; then
+    err "Failed to install snapd package"
+  fi
+
+  # Optionally, ensure the service is running, though apt usually handles this
+  log "Waiting briefly for snapd service to initialize..."
+  sleep 5 # Give snapd a moment to start up after installation
+  if systemctl is-active --quiet snapd.service && systemctl is-enabled --quiet snapd.service; then
+     log "snapd service is active and enabled."
+  else
+     log "Warning: snapd service might not be running or enabled. Trying to start/enable."
+     systemctl enable --now snapd.service || log "Warning: Failed to enable/start snapd service."
+  fi
+
+  log "snapd installed successfully"
+}
+
+#######################################
+# Install Snap applications defined in SNAP_APPS
+# Globals:
+#   SNAP_APPS
+# Arguments:
+#   None
+#######################################
+install_snap_apps() {
+  # Ensure snap command exists. install_snapd should have been called before this.
+  if ! command_exists snap; then
+    err "Snap command not found. Ensure snapd is installed correctly."
+    return 1 # Should not happen if install_snapd was called
+  fi
+
+  log "Installing Snap applications specified in SNAP_APPS"
+
+  local app
+  local installed_count=0
+  local failed_count=0
+  local skipped_count=0
+
+  for app in "${SNAP_APPS[@]}"; do
+    # Check if the snap is already installed
+    # 'snap list' output starts with Name, Version, Rev, Tracking, Publisher, Notes
+    # We grep for the app name at the beginning of a line followed by whitespace
+    if snap list | grep -q "^${app}\s"; then
+      log "Snap package '${app}' is already installed, skipping."
+      ((skipped_count++))
+    else
+      log "Installing Snap package: ${app}"
+      # Use --classic for snaps that require broader system access if needed.
+      # This might need adjustment based on the specific snaps you list.
+      # For now, attempting standard install. Add --classic conditionally if required.
+      if ! snap install "${app}"; then
+        # Check specifically for confinement errors suggesting --classic is needed
+        if snap install "${app}" 2>&1 | grep -q "requires classic confinement"; then
+           log "Installation of '${app}' failed standard confinement, trying with --classic"
+           if ! snap install --classic "${app}"; then
+              log "Warning: Failed to install Snap package '${app}' even with --classic flag."
+              ((failed_count++))
+            else
+              log "Snap package '${app}' installed successfully (using --classic)."
+              ((installed_count++))
+           fi
+        else
+           log "Warning: Failed to install Snap package '${app}'."
+           ((failed_count++))
+        fi
+      else
+        log "Snap package '${app}' installed successfully."
+        ((installed_count++))
+      fi
+    fi
+  done
+
+  log "Snap installation summary: ${installed_count} installed, ${failed_count} failed, ${skipped_count} skipped."
+
+  if (( failed_count > 0 )); then
+    log "Warning: Some Snap packages failed to install. Check the log for details."
+  fi
+
+  # Ensure core snap is up-to-date, sometimes needed after installs
+  log "Ensuring 'core' snap is up-to-date"
+  snap refresh core || log "Warning: Failed to refresh 'core' snap."
+
 }
 
 #######################################
@@ -1527,6 +1633,9 @@ main() {
  log "Installing development packages"
  install_packages "${DEV_PACKAGES[@]}"
 
+  # Install snapd framework (before trying to install snap apps)
+  install_snapd
+
  
  # Install Neovim from unstable PPA
  install_neovim
@@ -1558,6 +1667,9 @@ main() {
 
  # Install Flatpak apps
  install_flatpak_apps
+
+ # Install Snap apps
+  install_snap_apps
  
  # Remove conflicting Docker packages
  remove_conflicting_packages
