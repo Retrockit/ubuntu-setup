@@ -1026,7 +1026,7 @@ function install_msty_app() {
   local apps_dir="/home/${current_user}/.local/bin"
   local app_image_path="${apps_dir}/Msty.AppImage"
   local desktop_file_path="/home/${current_user}/.local/share/applications/msty.desktop"
-  local icon_dir="/home/${current_user}/.local/share/icons/hicolor/512x512/apps"
+  local icon_dir="/home/${current_user}/.local/share/icons/hicolor/256x256/apps"
   local msty_url="https://assets.msty.app/prod/latest/linux/amd64/Msty_x86_64_amd64.AppImage"
   
   log "Installing Msty.app"
@@ -1053,20 +1053,30 @@ function install_msty_app() {
   log "Making AppImage executable for all users"
   su -l "${current_user}" -c "chmod a+x '${app_image_path}'"
   
-  # Extract icon from the AppImage
-  log "Extracting application icon"
-  # Create a temp directory for extraction
-  local temp_dir="/tmp/msty-extract"
-  su -l "${current_user}" -c "mkdir -p ${temp_dir}"
+  # Instead of trying to extract the icon from the AppImage (which is failing),
+  # let's use a generic icon or download one specifically for Msty
+  log "Setting application icon"
   
-  # Extract the icon (if available)
-  # Note: We'll try to extract the icon, but if it fails, we'll continue without it
-  if su -l "${current_user}" -c "${app_image_path} --appimage-extract appicon.png &>/dev/null"; then
-    su -l "${current_user}" -c "cp ${temp_dir}/squashfs-root/appicon.png ${icon_dir}/msty.png"
+  # Try to use an existing app icon from the system
+  local icon_path="${icon_dir}/msty.png"
+  if [ -f "/usr/share/icons/hicolor/256x256/apps/web-browser.png" ]; then
+    # Use a web browser icon as fallback
+    su -l "${current_user}" -c "cp /usr/share/icons/hicolor/256x256/apps/web-browser.png '${icon_path}'"
+  elif [ -f "/usr/share/icons/gnome/256x256/apps/web-browser.png" ]; then
+    # Alternative location
+    su -l "${current_user}" -c "cp /usr/share/icons/gnome/256x256/apps/web-browser.png '${icon_path}'"
   else
-    log "Could not extract icon from AppImage. Using a placeholder icon."
-    # Create a generic icon or use a system one
-    su -l "${current_user}" -c "cp /usr/share/icons/hicolor/scalable/apps/org.gnome.Software.svg ${icon_dir}/msty.png" || true
+    # Create a simple colored square as icon if no suitable icon is found
+    log "No suitable icon found, creating a simple placeholder icon"
+    su -l "${current_user}" -c "cat > '${icon_path}' << 'EOL'
+<svg xmlns='http://www.w3.org/2000/svg' width='256' height='256'>
+  <rect width='256' height='256' fill='#4d4d4d'/>
+  <text x='50%' y='50%' font-size='60' text-anchor='middle' fill='white' font-family='sans-serif' dominant-baseline='middle'>Msty</text>
+</svg>
+EOL"
+    # Rename to .svg extension
+    su -l "${current_user}" -c "mv '${icon_path}' '${icon_dir}/msty.svg'"
+    icon_path="${icon_dir}/msty.svg"
   fi
   
   # Create a desktop file
@@ -1076,19 +1086,16 @@ function install_msty_app() {
 Name=Msty
 Comment=Msty Application
 Exec=${app_image_path} --no-sandbox %U
-Icon=${icon_dir}/msty.png
+Icon=${icon_path}
 Terminal=false
 Type=Application
-Categories=Utility;
+Categories=Network;WebBrowser;
 StartupWMClass=Msty
 EOL"
   
   # Update desktop database to recognize the new application
   log "Updating desktop database"
   su -l "${current_user}" -c "update-desktop-database ~/.local/share/applications"
-  
-  # Clean up temporary files
-  su -l "${current_user}" -c "rm -rf ${temp_dir}"
   
   log "Msty.app has been installed successfully"
   log "You can find it in your application drawer or run it from ${app_image_path}"
