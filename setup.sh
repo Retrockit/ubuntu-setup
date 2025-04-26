@@ -606,6 +606,49 @@ install_neovim() {
       log "Warning: kickstart.nvim configuration may have failed, please check manually"
     fi
   fi
+
+  # Add aliases for vim and vi to use neovim
+  log "Setting up aliases for vim and vi to use neovim"
+
+  # For fish shell
+  local fish_config_dir="/home/${current_user}/.config/fish"
+  local fish_config_file="${fish_config_dir}/config.fish"
+  
+  if [ -f "${fish_config_file}" ]; then
+    if ! grep -q "alias vim='nvim'" "${fish_config_file}" && ! grep -q "alias vi='nvim'" "${fish_config_file}"; then
+      log "Adding vim and vi aliases to fish config"
+      cat >> "${fish_config_file}" << 'EOF'
+      
+# Neovim aliases
+alias vim='nvim'
+alias vi='nvim'
+EOF
+    chown "${current_user}:${current_user}" "${fish_config_file}"
+    else
+      log "vim and vi aliases already exist in fish config"
+    fi
+  fi
+
+  # For bash shell
+  local bash_rc="/home/${current_user}/.bashrc"
+  
+  if [ -f "${bash_rc}" ]; then
+    if ! grep -q "alias vim='nvim'" "${bash_rc}" && ! grep -q "alias vi='nvim'" "${bash_rc}"; then
+      log "Adding vim and vi aliases to bash config"
+      cat >> "${bash_rc}" << 'EOF'
+
+# Neovim aliases
+alias vim='nvim'
+alias vi='nvim'
+EOF
+    else
+      log "vim and vi aliases already exist in bash config"
+    fi
+  fi
+  
+  log "Neovim aliases have been set up successfully"
+}
+  
 }
 
 #######################################
