@@ -302,6 +302,47 @@ function install_snap_apps() {
 }
 
 #######################################
+# Install Steam dependencies
+# Globals:
+#   None
+# Arguments:
+#   None
+#######################################
+function install_steam_dependencies() {
+  log "Installing Steam dependencies"
+  
+  # Enable multi-arch support if not already enabled
+  if [ "$(dpkg --print-foreign-architectures | grep -c i386)" -eq 0 ]; then
+    log "Enabling i386 architecture support"
+    dpkg --add-architecture i386
+    apt-get update
+  fi
+  
+  # List of Steam dependencies
+  local steam_deps=(
+    "libc6:amd64"
+    "libc6:i386"
+    "libegl1:amd64"
+    "libegl1:i386"
+    "libgbm1:amd64"
+    "libgbm1:i386"
+    "libgl1-mesa-dri:amd64"
+    "libgl1-mesa-dri:i386"
+    "libgl1:amd64"
+    "libgl1:i386"
+  )
+  
+  # Install dependencies
+  log "Installing Steam dependencies: ${steam_deps[*]}"
+  if ! apt-get install -y "${steam_deps[@]}"; then
+    log "Warning: Some Steam dependencies may not have installed correctly"
+    # Continue anyway, as Steam will try to install its dependencies
+  else
+    log "Steam dependencies installed successfully"
+  fi
+}
+
+#######################################
 # Install Steam
 # Globals:
 #   None
@@ -320,12 +361,8 @@ function install_steam() {
   
   log "Installing Steam"
   
-  # Enable multi-arch support if not already enabled
-  if [ "$(dpkg --print-foreign-architectures | grep -c i386)" -eq 0 ]; then
-    log "Enabling i386 architecture support"
-    dpkg --add-architecture i386
-    apt-get update
-  fi
+  # Install Steam dependencies first
+  install_steam_dependencies
   
   # Download the Steam package
   log "Downloading Steam package"
