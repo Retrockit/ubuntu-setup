@@ -281,8 +281,9 @@ install_snapd() {
 install_snap_apps() {
   # Ensure snap command exists. install_snapd should have been called before this.
   if ! command_exists snap; then
+    # This err call IS intended to stop the script if snap isn't found
     err "Snap command not found. Ensure snapd is installed correctly."
-    return 1 # Should not happen if install_snapd was called
+    return 1 # Defensive exit code, though err already exits
   fi
 
   log "Installing Snap applications specified in SNAP_APPS"
@@ -291,51 +292,62 @@ install_snap_apps() {
   local installed_count=0
   local failed_count=0
   local skipped_count=0
+  local install_output # Variable to capture output/errors
+
+  # Handle empty array case gracefully
+  if (( ${#SNAP_APPS[@]} == 0 )); then
+     log "SNAP_APPS array is empty. No snaps to install."
+     return 0 # Successfully did nothing
+  fi
 
   for app in "${SNAP_APPS[@]}"; do
     # Check if the snap is already installed
-    # 'snap list' output starts with Name, Version, Rev, Tracking, Publisher, Notes
-    # We grep for the app name at the beginning of a line followed by whitespace
     if snap list | grep -q "^${app}\s"; then
       log "Snap package '${app}' is already installed, skipping."
       ((skipped_count++))
+      continue # Move to the next app
+    fi
+
+    log "Attempting to install Snap package: ${app}"
+    # Attempt standard install, capture stderr to check for confinement error
+    if ! install_output=$(snap install "${app}" 2>&1); then
+       # Standard install failed, check the output
+       log "Standard install failed for '${app}'. Output: ${install_output}" # Log the reason
+       if echo "${install_output}" | grep -q "requires classic confinement"; then
+          log "'${app}' requires classic confinement. Trying with --classic flag."
+          if ! snap install --classic "${app}"; then
+             log "Warning: Failed to install Snap package '${app}' even with --classic flag."
+             ((failed_count++))
+          else
+             log "Snap package '${app}' installed successfully (using --classic)."
+             ((installed_count++))
+          fi
+       else
+          # Failed for a reason other than needing --classic
+          log "Warning: Failed to install Snap package '${app}' for a non-confinement reason."
+          ((failed_count++))
+       fi
     else
-      log "Installing Snap package: ${app}"
-      # Use --classic for snaps that require broader system access if needed.
-      # This might need adjustment based on the specific snaps you list.
-      # For now, attempting standard install. Add --classic conditionally if required.
-      if ! snap install "${app}"; then
-        # Check specifically for confinement errors suggesting --classic is needed
-        if snap install "${app}" 2>&1 | grep -q "requires classic confinement"; then
-           log "Installation of '${app}' failed standard confinement, trying with --classic"
-           if ! snap install --classic "${app}"; then
-              log "Warning: Failed to install Snap package '${app}' even with --classic flag."
-              ((failed_count++))
-            else
-              log "Snap package '${app}' installed successfully (using --classic)."
-              ((installed_count++))
-           fi
-        else
-           log "Warning: Failed to install Snap package '${app}'."
-           ((failed_count++))
-        fi
-      else
-        log "Snap package '${app}' installed successfully."
-        ((installed_count++))
-      fi
+       # Standard install SUCCEEDED
+       log "Snap package '${app}' installed successfully."
+       ((installed_count++))
     fi
   done
 
   log "Snap installation summary: ${installed_count} installed, ${failed_count} failed, ${skipped_count} skipped."
 
-  if (( failed_count > 0 )); then
-    log "Warning: Some Snap packages failed to install. Check the log for details."
+  # Explicitly handle the failure of 'snap refresh core'
+  log "Ensuring 'core' snap is up-to-date"
+  if ! snap refresh core; then
+     log "Warning: Failed to refresh 'core' snap. Continuing script execution."
+     # We explicitly DO NOT increment failed_count or exit here, as it's often non-critical
   fi
 
-  # Ensure core snap is up-to-date, sometimes needed after installs
-  log "Ensuring 'core' snap is up-to-date"
-  snap refresh core || log "Warning: Failed to refresh 'core' snap."
-
+  # Do not add an 'err' here based on failed_count unless you WANT the script to stop
+  # if any snap fails. The current logic logs warnings and continues.
+  if (( failed_count > 0 )); then
+    log "Note: Some Snap packages failed to install. Check the log above for details."
+  fi
 }
 
 #######################################
