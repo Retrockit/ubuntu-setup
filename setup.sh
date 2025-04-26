@@ -905,6 +905,30 @@ install_podman() {
  else
    err "Podman installation failed"
  fi
+
+ # Fix AppArmor profile
+  log "Updating AppArmor profile for Podman"
+  
+  if [ -f "/etc/apparmor.d/podman" ]; then
+    log "Modifying AppArmor profile to use the correct Podman path"
+    
+    # Create backup of original file
+    cp "/etc/apparmor.d/podman" "/etc/apparmor.d/podman.bak"
+    
+    # Replace path in AppArmor profile
+    sed -i 's|profile podman /usr/bin/podman|profile podman /usr/local/bin/podman|g' "/etc/apparmor.d/podman"
+    
+    # Reload AppArmor profile
+    log "Reloading AppArmor profile"
+    if command_exists apparmor_parser; then
+      apparmor_parser -r "/etc/apparmor.d/podman"
+      log "AppArmor profile reloaded successfully"
+    else
+      log "AppArmor parser not found, skipping profile reload"
+    fi
+  else
+    log "AppArmor profile for Podman not found, skipping modification"
+  fi
 }
 
 #######################################
