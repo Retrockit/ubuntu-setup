@@ -79,6 +79,20 @@ readonly FLATPAK_PACKAGES=(
  "gnome-software-plugin-flatpak"
 )
 
+# list of Flatpak apps to install
+readonly FLATPAK_APPS=(
+  "com.spotify.Client"                   # Spotify
+  "org.mozilla.firefox"                  # Firefox
+  "org.videolan.VLC"                     # VLC Media Player
+  "com.discordapp.Discord"               # Discord
+  "com.slack.Slack"                      # Slack
+  "org.telegram.desktop"                 # Telegram
+  "com.bitwarden.desktop"                # Bitwarden
+  "com.github.tchx84.Flatseal"           # Flatseal (Flatpak permissions manager)
+  "org.gnome.Boxes"                      # GNOME Boxes
+  "org.gimp.GIMP"                        # GIMP
+)
+
 # Docker packages to install
 readonly DOCKER_PACKAGES=(
  "docker-ce"
@@ -855,6 +869,48 @@ install_flatpak() {
 }
 
 #######################################
+# Install Flatpak apps for the current user
+# Globals:
+#   FLATPAK_APPS
+# Arguments:
+#   None
+#######################################
+install_flatpak_apps() {
+  local current_user
+  current_user=$(logname 2>/dev/null || echo "${SUDO_USER:-$USER}")
+  
+  log "Installing Flatpak applications for user ${current_user}"
+  
+  # Make sure Flatpak is installed before proceeding
+  if ! command_exists flatpak; then
+    log "Flatpak is not installed. Installing it first."
+    install_flatpak
+  fi
+  
+  # Install each app in the FLATPAK_APPS array
+  for app in "${FLATPAK_APPS[@]}"; do
+    # Extract app name for logging (remove everything before the last dot)
+    local app_name
+    app_name=$(echo "$app" | sed 's/.*\.//')
+    
+    # Check if the app is already installed
+    if su -l "${current_user}" -c "flatpak list --app | grep -q ${app}"; then
+      log "Flatpak app ${app_name} is already installed"
+    else
+      log "Installing Flatpak app: ${app_name}"
+      if ! su -l "${current_user}" -c "flatpak install --user -y flathub ${app}"; then
+        log "Warning: Failed to install Flatpak app ${app_name}"
+        # Continue with the next app instead of exiting
+      else
+        log "Flatpak app ${app_name} installed successfully"
+      fi
+    fi
+  done
+  
+  log "Flatpak applications installation completed"
+}
+
+#######################################
 # Install pyenv for the current user
 # Globals:
 #   PYENV_DEPENDENCIES
@@ -1126,6 +1182,9 @@ main() {
  
  # Install Flatpak
  install_flatpak
+
+ # Install Flatpak apps
+ install_flatpak_apps
  
  # Remove conflicting Docker packages
  remove_conflicting_packages
