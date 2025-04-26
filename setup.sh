@@ -91,6 +91,7 @@ readonly UTIL_PACKAGES=(
 readonly SNAP_APPS=(
     "postman"  # API Development Environment
     "obs-studio" # OBS Studio Installation
+    "Helix"
   # "spotify"  # Music Streaming
   # Add other desired snap packages here
   # "code"   # Example: VS Code (consider conflicts if installing via .deb too)
