@@ -1012,6 +1012,89 @@ install_chrome_beta() {
 }
 
 #######################################
+# Install Msty.app AppImage
+# Globals:
+#   None
+# Arguments:
+#   None
+#######################################
+function install_msty_app() {
+  local current_user
+  current_user=$(logname 2>/dev/null || echo "${SUDO_USER:-$USER}")
+  
+  # Define installation paths
+  local apps_dir="/home/${current_user}/.local/bin"
+  local app_image_path="${apps_dir}/Msty.AppImage"
+  local desktop_file_path="/home/${current_user}/.local/share/applications/msty.desktop"
+  local icon_dir="/home/${current_user}/.local/share/icons/hicolor/512x512/apps"
+  local msty_url="https://assets.msty.app/prod/latest/linux/amd64/Msty_x86_64_amd64.AppImage"
+  
+  log "Installing Msty.app"
+  
+  # Check if Msty is already installed
+  if [ -f "${app_image_path}" ] && [ -f "${desktop_file_path}" ]; then
+    log "Msty.app is already installed at ${app_image_path}"
+    return 0
+  fi
+  
+  # Create necessary directories
+  log "Creating application directories"
+  su -l "${current_user}" -c "mkdir -p ${apps_dir}"
+  su -l "${current_user}" -c "mkdir -p $(dirname "${desktop_file_path}")"
+  su -l "${current_user}" -c "mkdir -p ${icon_dir}"
+  
+  # Download Msty AppImage
+  log "Downloading Msty.app AppImage"
+  if ! su -l "${current_user}" -c "wget -q --show-progress -O '${app_image_path}' '${msty_url}'"; then
+    err "Failed to download Msty.app AppImage"
+  fi
+  
+  # Make the AppImage executable for all users
+  log "Making AppImage executable for all users"
+  su -l "${current_user}" -c "chmod a+x '${app_image_path}'"
+  
+  # Extract icon from the AppImage
+  log "Extracting application icon"
+  # Create a temp directory for extraction
+  local temp_dir="/tmp/msty-extract"
+  su -l "${current_user}" -c "mkdir -p ${temp_dir}"
+  
+  # Extract the icon (if available)
+  # Note: We'll try to extract the icon, but if it fails, we'll continue without it
+  if su -l "${current_user}" -c "${app_image_path} --appimage-extract appicon.png &>/dev/null"; then
+    su -l "${current_user}" -c "cp ${temp_dir}/squashfs-root/appicon.png ${icon_dir}/msty.png"
+  else
+    log "Could not extract icon from AppImage. Using a placeholder icon."
+    # Create a generic icon or use a system one
+    su -l "${current_user}" -c "cp /usr/share/icons/hicolor/scalable/apps/org.gnome.Software.svg ${icon_dir}/msty.png" || true
+  fi
+  
+  # Create a desktop file
+  log "Creating desktop shortcut"
+  su -l "${current_user}" -c "cat > '${desktop_file_path}' << EOL
+[Desktop Entry]
+Name=Msty
+Comment=Msty Application
+Exec=${app_image_path} --no-sandbox %U
+Icon=${icon_dir}/msty.png
+Terminal=false
+Type=Application
+Categories=Utility;
+StartupWMClass=Msty
+EOL"
+  
+  # Update desktop database to recognize the new application
+  log "Updating desktop database"
+  su -l "${current_user}" -c "update-desktop-database ~/.local/share/applications"
+  
+  # Clean up temporary files
+  su -l "${current_user}" -c "rm -rf ${temp_dir}"
+  
+  log "Msty.app has been installed successfully"
+  log "You can find it in your application drawer or run it from ${app_image_path}"
+}
+
+#######################################
 # Install mise for the current user
 # Globals:
 #   MISE_INSTALLER
@@ -2033,6 +2116,9 @@ main() {
 
  # Install 1Password
  install_1password
+
+ # Install Msty.app
+  install_msty_app
  
  # Install Flatpak
  install_flatpak
