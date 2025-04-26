@@ -905,56 +905,46 @@ install_podman() {
  else
    err "Podman installation failed"
  fi
-
-# Fix AppArmor profile
-log "Updating AppArmor profile for Podman with explicit file handling"
-
-if [ -f "/etc/apparmor.d/podman" ]; then
-  log "Found AppArmor profile at /etc/apparmor.d/podman"
-  
-  # Create backup with cat instead of cp
-  cat "/etc/apparmor.d/podman" > "/etc/apparmor.d/podman.bak"
-  log "Created backup at /etc/apparmor.d/podman.bak"
-  
-  # Check current content
-  log "Current profile content before modification:"
-  cat "/etc/apparmor.d/podman"
-  
-  # Create a completely new file rather than using sed
-  cat > "/etc/apparmor.d/podman.new" << 'EOF'
-# This profile allows everything and only exists to give the
-# application a name instead of having the label "unconfined"
-
-abi <abi/4.0>,
-include <tunables/global>
-
-profile podman /usr/local/bin/podman flags=(unconfined) {
-  userns,
-
-  # Site-specific additions and overrides. See local/README for details.
-  include if exists <local/podman>
 }
-EOF
 
-  # Replace the original file
-  cat "/etc/apparmor.d/podman.new" > "/etc/apparmor.d/podman"
-  rm -f "/etc/apparmor.d/podman.new"
-  
-  # Verify the replacement worked
-  log "New profile content after modification:"
-  cat "/etc/apparmor.d/podman"
-  
-  # Reload AppArmor profile
-  log "Reloading AppArmor profile"
-  if command_exists apparmor_parser; then
-    apparmor_parser -r "/etc/apparmor.d/podman" || log "Warning: Failed to reload AppArmor profile"
-    log "AppArmor profile reload attempted"
+#######################################
+# Fix AppArmor profile for Podman
+# Globals:
+#   None
+# Arguments:
+#   None
+#######################################
+fix_podman_apparmor() {
+  log "Updating AppArmor profile for Podman"
+
+  if [ -f "/etc/apparmor.d/podman" ]; then
+    log "Found AppArmor profile at /etc/apparmor.d/podman"
+    
+    # Create backup of original file
+    cp "/etc/apparmor.d/podman" "/etc/apparmor.d/podman.bak"
+    log "Created backup at /etc/apparmor.d/podman.bak"
+    
+    # Replace the binary path in the AppArmor profile
+    sed -i 's|profile podman /usr/bin/podman|profile podman /usr/local/bin/podman|g' "/etc/apparmor.d/podman"
+    
+    # Verify the change
+    if grep -q "/usr/local/bin/podman" "/etc/apparmor.d/podman"; then
+      log "AppArmor profile updated successfully"
+    else
+      log "Warning: Failed to update AppArmor profile with sed, check manually"
+    fi
+    
+    # Reload AppArmor profile
+    log "Reloading AppArmor profile"
+    if command_exists apparmor_parser; then
+      apparmor_parser -r "/etc/apparmor.d/podman" || log "Warning: Failed to reload AppArmor profile"
+      log "AppArmor profile reloaded"
+    else
+      log "AppArmor parser not found, skipping profile reload"
+    fi
   else
-    log "AppArmor parser not found, skipping profile reload"
+    log "AppArmor profile for Podman not found at /etc/apparmor.d/podman"
   fi
-else
-  log "AppArmor profile for Podman not found at /etc/apparmor.d/podman"
-fi
 }
 
 #######################################
@@ -1564,6 +1554,9 @@ main() {
  
  # Configure Podman
  configure_podman
+
+ # Fix Podman AppArmor profile
+ fix_podman_apparmor
  
  # Install pyenv
  install_pyenv
