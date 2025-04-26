@@ -908,43 +908,65 @@ install_podman() {
 }
 
 #######################################
-# Fix AppArmor profile for Podman
+# Fix Podman AppArmor and unprivileged user namespace restrictions
 # Globals:
 #   None
 # Arguments:
 #   None
 #######################################
-fix_podman_apparmor() {
-  log "Updating AppArmor profile for Podman"
-
+fix_podman_userns() {
+  log "Configuring system to allow Podman to use unprivileged user namespaces"
+  
+  # 1. First fix the Podman AppArmor profile path
   if [ -f "/etc/apparmor.d/podman" ]; then
-    log "Found AppArmor profile at /etc/apparmor.d/podman"
+    log "Updating Podman AppArmor profile"
     
     # Create backup of original file
     cp "/etc/apparmor.d/podman" "/etc/apparmor.d/podman.bak"
-    log "Created backup at /etc/apparmor.d/podman.bak"
     
-    # Replace the binary path in the AppArmor profile
-    sed -i 's|profile podman /usr/bin/podman|profile podman /usr/local/bin/podman|g' "/etc/apparmor.d/podman"
+    # Create updated profile with pattern matching for both locations
+    cat > "/etc/apparmor.d/podman" << 'EOF'
+# This profile allows everything and only exists to give the
+# application a name instead of having the label "unconfined"
+
+abi <abi/4.0>,
+include <tunables/global>
+
+profile podman /usr/{bin,local/bin}/podman flags=(unconfined) {
+  userns,
+
+  # Site-specific additions and overrides. See local/README for details.
+  include if exists <local/podman>
+}
+EOF
     
-    # Verify the change
-    if grep -q "/usr/local/bin/podman" "/etc/apparmor.d/podman"; then
-      log "AppArmor profile updated successfully"
-    else
-      log "Warning: Failed to update AppArmor profile with sed, check manually"
-    fi
-    
-    # Reload AppArmor profile
-    log "Reloading AppArmor profile"
-    if command_exists apparmor_parser; then
-      apparmor_parser -r "/etc/apparmor.d/podman" || log "Warning: Failed to reload AppArmor profile"
-      log "AppArmor profile reloaded"
-    else
-      log "AppArmor parser not found, skipping profile reload"
-    fi
-  else
-    log "AppArmor profile for Podman not found at /etc/apparmor.d/podman"
+    log "Podman AppArmor profile updated to use pattern matching for binary location"
   fi
+  
+  # 2. Disable the unprivileged user namespace restrictions
+  log "Disabling AppArmor unprivileged user namespace restrictions"
+  
+  # Create sysctl config file
+  cat > "/etc/sysctl.d/99-podman-userns.conf" << 'EOF'
+# Allow unprivileged user namespaces for Podman
+kernel.apparmor_restrict_unprivileged_unconfined=0
+kernel.apparmor_restrict_unprivileged_userns=0
+EOF
+  
+  # Apply sysctl settings
+  log "Applying sysctl settings"
+  sysctl -p /etc/sysctl.d/99-podman-userns.conf
+  
+  # 3. Reload AppArmor profiles
+  log "Reloading AppArmor profiles"
+  if command_exists apparmor_parser; then
+    apparmor_parser -r "/etc/apparmor.d/podman" || log "Warning: Failed to reload AppArmor profile"
+    log "AppArmor profile reloaded"
+  else
+    log "AppArmor parser not found, skipping profile reload"
+  fi
+  
+  log "Podman AppArmor and unprivileged user namespace configuration completed"
 }
 
 #######################################
@@ -1555,8 +1577,8 @@ main() {
  # Configure Podman
  configure_podman
 
- # Fix Podman AppArmor profile
- fix_podman_apparmor
+ # Fix Podman AppArmor and unprivileged user namespaces
+ fix_podman_userns
  
  # Install pyenv
  install_pyenv
