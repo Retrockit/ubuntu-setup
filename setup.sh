@@ -907,26 +907,21 @@ install_podman() {
  fi
 
 # Fix AppArmor profile
-log "Updating AppArmor profile for Podman"
+log "Updating AppArmor profile for Podman with explicit file handling"
 
 if [ -f "/etc/apparmor.d/podman" ]; then
   log "Found AppArmor profile at /etc/apparmor.d/podman"
   
-  # Create backup of original file
-  cp "/etc/apparmor.d/podman" "/etc/apparmor.d/podman.bak"
+  # Create backup with cat instead of cp
+  cat "/etc/apparmor.d/podman" > "/etc/apparmor.d/podman.bak"
   log "Created backup at /etc/apparmor.d/podman.bak"
   
-  # Replace the exact line with the correct path
-  sed -i 's|profile podman /usr/bin/podman|profile podman /usr/local/bin/podman|g' "/etc/apparmor.d/podman"
+  # Check current content
+  log "Current profile content before modification:"
+  cat "/etc/apparmor.d/podman"
   
-  # Check if the file was modified
-  if grep -q "/usr/local/bin/podman" "/etc/apparmor.d/podman"; then
-    log "AppArmor profile updated successfully"
-  else
-    log "Warning: Failed to update AppArmor profile automatically"
-    
-    # Create a new profile file with the correct path
-    cat > "/etc/apparmor.d/podman.new" << EOF
+  # Create a completely new file rather than using sed
+  cat > "/etc/apparmor.d/podman.new" << 'EOF'
 # This profile allows everything and only exists to give the
 # application a name instead of having the label "unconfined"
 
@@ -941,10 +936,13 @@ profile podman /usr/local/bin/podman flags=(unconfined) {
 }
 EOF
 
-    # Replace the original with our new version
-    mv "/etc/apparmor.d/podman.new" "/etc/apparmor.d/podman"
-    log "AppArmor profile replaced with corrected version"
-  fi
+  # Replace the original file
+  cat "/etc/apparmor.d/podman.new" > "/etc/apparmor.d/podman"
+  rm -f "/etc/apparmor.d/podman.new"
+  
+  # Verify the replacement worked
+  log "New profile content after modification:"
+  cat "/etc/apparmor.d/podman"
   
   # Reload AppArmor profile
   log "Reloading AppArmor profile"
