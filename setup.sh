@@ -1066,6 +1066,58 @@ EOF
  log "Fish shell has been configured successfully"
 }
 
+#######################################
+# Install and configure KVM with libvirt
+# Globals:
+#   None
+# Arguments:
+#   None
+#######################################
+install_kvm_libvirt() {
+  local current_user
+  current_user=$(logname 2>/dev/null || echo "${SUDO_USER:-$USER}")
+  
+  log "Installing KVM and libvirt packages"
+  
+  # Install KVM and libvirt packages
+  apt-get install -y qemu-kvm libvirt-daemon-system libvirt-clients bridge-utils virt-manager
+  
+  # Enable and start the modular daemons
+  log "Enabling and starting libvirt modular daemons"
+  
+  for drv in qemu network nodedev nwfilter secret storage
+  do
+    log "Enabling and starting virt${drv}d modular daemon"
+    systemctl enable virt${drv}d.service
+    systemctl enable virt${drv}d{,-ro,-admin}.socket
+    systemctl start virt${drv}d{,-ro,-admin}.socket
+  done
+  
+  # Add user to the kvm and libvirt groups
+  log "Adding user ${current_user} to kvm and libvirt groups"
+  if ! getent group kvm | grep -q "\b${current_user}\b"; then
+    usermod -aG kvm "${current_user}"
+  fi
+  
+  if ! getent group libvirt | grep -q "\b${current_user}\b"; then
+    usermod -aG libvirt "${current_user}"
+  fi
+  
+  # Start and enable default NAT network
+  log "Starting and enabling default NAT network"
+  if ! virsh net-info default | grep -q "Active:.*yes"; then
+    virsh net-start default || log "Default network may already be running"
+  fi
+  virsh net-autostart default
+  
+  # Verify installation
+  if command_exists virsh && virsh -c qemu:///system list >/dev/null 2>&1; then
+    log "KVM and libvirt installed and configured successfully"
+  else
+    log "Warning: KVM and libvirt installation may not be complete. Please check manually."
+  fi
+}
+
 
 #######################################
 # Prompt for system restart unless auto mode is enabled
@@ -1166,6 +1218,9 @@ main() {
  
  # Install Neovim from unstable PPA
  install_neovim
+
+ # Install KVM and libvirt
+ install_kvm_libvirt
  
  # Install utility packages
  log "Installing utility packages"
