@@ -845,7 +845,7 @@ EOF
 }
 
 #######################################
-# Install 1Password
+# Install 1Password desktop and CLI
 # Globals:
 #   None
 # Arguments:
@@ -854,37 +854,62 @@ EOF
 install_1password() {
   local password_deb="/tmp/1password-latest.deb"
   
+  log "Installing 1Password desktop and CLI"
+  
   # Check if 1Password is already installed
   if package_installed "1password"; then
-    log "1Password is already installed"
-    return 0
-  fi
-  
-  log "Installing 1Password"
-  
-  # Download the latest 1Password package
-  log "Downloading 1Password package"
-  if ! wget -q -O "${password_deb}" "https://downloads.1password.com/linux/debian/amd64/stable/1password-latest.deb"; then
-    err "Failed to download 1Password package"
-  fi
-  
-  # Install the package
-  log "Installing 1Password package"
-  if ! dpkg -i "${password_deb}"; then
-    # If there are dependency issues, try to fix them
-    log "Fixing dependencies"
-    apt-get install -f -y
+    log "1Password desktop is already installed"
+  else
+    # Download the latest 1Password package
+    log "Downloading 1Password desktop package"
+    if ! wget -q -O "${password_deb}" "https://downloads.1password.com/linux/debian/amd64/stable/1password-latest.deb"; then
+      err "Failed to download 1Password package"
+    fi
     
-    # Try the installation again
+    # Install the package
+    log "Installing 1Password desktop package"
     if ! dpkg -i "${password_deb}"; then
-      err "Failed to install 1Password package"
+      # If there are dependency issues, try to fix them
+      log "Fixing dependencies"
+      apt-get install -f -y
+      
+      # Try the installation again
+      if ! dpkg -i "${password_deb}"; then
+        err "Failed to install 1Password desktop package"
+      fi
+    fi
+    
+    # Clean up the downloaded package
+    rm -f "${password_deb}"
+    
+    log "1Password desktop installed successfully"
+  fi
+  
+  # Check if 1Password CLI is already installed
+  if command_exists op; then
+    log "1Password CLI is already installed"
+  else
+    # Update package database to recognize the repository added by 1Password
+    log "Updating package database"
+    apt-get update
+    
+    # Install 1Password CLI
+    log "Installing 1Password CLI package"
+    if ! apt-get install -y 1password-cli; then
+      err "Failed to install 1Password CLI"
+    fi
+    
+    # Verify installation
+    if command_exists op; then
+      local version
+      version=$(op --version)
+      log "1Password CLI version ${version} installed successfully"
+    else
+      err "1Password CLI installation verification failed"
     fi
   fi
   
-  # Clean up the downloaded package
-  rm -f "${password_deb}"
-  
-  log "1Password installed successfully"
+  log "1Password desktop and CLI installation completed"
 }
 
 #######################################
