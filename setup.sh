@@ -906,29 +906,57 @@ install_podman() {
    err "Podman installation failed"
  fi
 
- # Fix AppArmor profile
-  log "Updating AppArmor profile for Podman"
+# Fix AppArmor profile
+log "Updating AppArmor profile for Podman"
+
+if [ -f "/etc/apparmor.d/podman" ]; then
+  log "Found AppArmor profile at /etc/apparmor.d/podman"
   
-  if [ -f "/etc/apparmor.d/podman" ]; then
-    log "Modifying AppArmor profile to use the correct Podman path"
-    
-    # Create backup of original file
-    cp "/etc/apparmor.d/podman" "/etc/apparmor.d/podman.bak"
-    
-    # Replace path in AppArmor profile
-    sed -i 's|profile podman /usr/bin/podman|profile podman /usr/local/bin/podman|g' "/etc/apparmor.d/podman"
-    
-    # Reload AppArmor profile
-    log "Reloading AppArmor profile"
-    if command_exists apparmor_parser; then
-      apparmor_parser -r "/etc/apparmor.d/podman"
-      log "AppArmor profile reloaded successfully"
-    else
-      log "AppArmor parser not found, skipping profile reload"
-    fi
+  # Create backup of original file
+  cp "/etc/apparmor.d/podman" "/etc/apparmor.d/podman.bak"
+  log "Created backup at /etc/apparmor.d/podman.bak"
+  
+  # Replace the exact line with the correct path
+  sed -i 's|profile podman /usr/bin/podman|profile podman /usr/local/bin/podman|g' "/etc/apparmor.d/podman"
+  
+  # Check if the file was modified
+  if grep -q "/usr/local/bin/podman" "/etc/apparmor.d/podman"; then
+    log "AppArmor profile updated successfully"
   else
-    log "AppArmor profile for Podman not found, skipping modification"
+    log "Warning: Failed to update AppArmor profile automatically"
+    
+    # Create a new profile file with the correct path
+    cat > "/etc/apparmor.d/podman.new" << EOF
+# This profile allows everything and only exists to give the
+# application a name instead of having the label "unconfined"
+
+abi <abi/4.0>,
+include <tunables/global>
+
+profile podman /usr/local/bin/podman flags=(unconfined) {
+  userns,
+
+  # Site-specific additions and overrides. See local/README for details.
+  include if exists <local/podman>
+}
+EOF
+
+    # Replace the original with our new version
+    mv "/etc/apparmor.d/podman.new" "/etc/apparmor.d/podman"
+    log "AppArmor profile replaced with corrected version"
   fi
+  
+  # Reload AppArmor profile
+  log "Reloading AppArmor profile"
+  if command_exists apparmor_parser; then
+    apparmor_parser -r "/etc/apparmor.d/podman" || log "Warning: Failed to reload AppArmor profile"
+    log "AppArmor profile reload attempted"
+  else
+    log "AppArmor parser not found, skipping profile reload"
+  fi
+else
+  log "AppArmor profile for Podman not found at /etc/apparmor.d/podman"
+fi
 }
 
 #######################################
