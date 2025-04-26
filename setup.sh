@@ -90,6 +90,7 @@ readonly UTIL_PACKAGES=(
 # List of Snap apps to install
 readonly SNAP_APPS=(
     "postman"  # API Development Environment
+    "obs-studio" # OBS Studio Installation
   # "spotify"  # Music Streaming
   # Add other desired snap packages here
   # "code"   # Example: VS Code (consider conflicts if installing via .deb too)
@@ -254,64 +255,35 @@ update_system() {
 }
 
 #######################################
-# Install snap core if not already installed
-# Globals:
-#   None
-# Arguments:
-#   None
-#######################################
-install_snap() {
-  # Check if snapd is already installed
-  if ! command_exists snap; then
-    log "Installing snapd package"
-    apt-get update
-    if ! apt-get install -y snapd; then
-      err "Failed to install snapd"
-    fi
-    
-    # Ensure snap service is running and enabled
-    log "Ensuring snap service is running and enabled"
-    systemctl enable --now snapd.service
-    
-    # Create symbolic link for classic snap support
-    if [ ! -e /snap ]; then
-      ln -s /var/lib/snapd/snap /snap
-    fi
-    
-    log "snapd installed successfully"
-  else
-    log "snapd is already installed"
-  fi
-  
-  # Ensure core snap is installed
-  if ! snap list | grep -q "^core "; then
-    log "Installing core snap"
-    if ! snap install core; then
-      err "Failed to install core snap"
-    fi
-  fi
-}
-
-#######################################
-# Install snap applications for the current user
+# Install snap applications
 # Globals:
 #   SNAP_APPS
 # Arguments:
 #   None
 #######################################
-install_snap_apps() {
+function install_snap_apps() {
   log "Installing Snap applications"
   
-  # Make sure snap is installed before proceeding
-  install_snap
+  # Verify snapd is working
+  if ! command_exists snap; then
+    log "Warning: snap command not found. Attempting to install snapd."
+    if ! apt-get update && apt-get install -y snapd; then
+      err "Failed to install snapd. Cannot install snap applications."
+    fi
+    
+    # Ensure snap service is running and enabled
+    log "Ensuring snap service is running and enabled"
+    systemctl enable --now snapd.service
+  fi
+  
+  # Ensure core snap is up to date
+  log "Updating core snap"
+  if ! snap refresh core; then
+    log "Warning: Failed to refresh core snap. Continuing anyway."
+  fi
   
   # Install each app in the SNAP_APPS array
   for app_spec in "${SNAP_APPS[@]}"; do
-    # Skip "core" as we already installed it in install_snap
-    if [[ "${app_spec}" == "core" ]]; then
-      continue
-    fi
-    
     # Extract app name (everything before any space)
     local app_name
     app_name=$(echo "${app_spec}" | cut -d' ' -f1)
