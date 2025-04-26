@@ -1,23 +1,123 @@
 #!/bin/bash
 #
 # Ubuntu System Setup Script
-# 
+# ==========================
+#
+# Copyright (c) 2025 Franklin J. Lee
+# MIT License
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+#
 # This script automates the installation of commonly used tools on Ubuntu 24.10+.
 # It is designed to be idempotent and maintainable, allowing easy addition and 
 # removal of tools.
 #
-# Copyright 2023 Your Name
-# License: MIT
+# CUSTOMIZATION GUIDE
+# ------------------
 #
-# Usage:
+# 1. PACKAGE ARRAYS - Customize What Gets Installed
+#
+#    The script uses arrays to define what packages to install. Find these arrays
+#    near the top of the script (look for lines like "readonly SYSTEM_PACKAGES=(...)")
+#    and add or remove items to customize your installation:
+#
+#    - SYSTEM_PACKAGES: Core system utilities
+#    - DEV_PACKAGES: Development tools and libraries
+#    - UTIL_PACKAGES: Utility programs and tools
+#    - FLATPAK_APPS: Desktop applications from Flathub
+#    - SNAP_APPS: Applications from Snap store
+#
+#    Example: To remove GIMP from Flatpak installation, find FLATPAK_APPS and remove
+#    the "org.gimp.GIMP" line.
+#
+# 2. DISABLING COMPONENTS - Skip What You Don't Need
+#
+#    To disable entire components, find the corresponding function call in the main() 
+#    function and comment it out by adding # at the beginning:
+#
+#    Example: To skip Docker installation:
+#    # install_docker
+#    # configure_docker_post_install
+#
+# 3. ADDING NEW COMPONENTS
+#
+#    To add custom installations:
+#    a. Create a new function for your component (use existing functions as templates)
+#    b. Add a call to your function in the main() function
+#
+#    Example: For a custom app installation, add:
+#    function install_my_custom_app() {
+#      log "Installing my custom application"
+#      # Your installation commands
+#    }
+#    
+#    Then add in main(): install_my_custom_app
+#
+# USAGE
+# -----
+#
 #   ./setup.sh              Run interactively
 #   ./setup.sh --auto       Run in automatic mode (no prompts)
 #   ./setup.sh --help       Show usage information
 #   
-# Examples:
+# EXAMPLES
+# --------
+#
 #   sudo ./setup.sh                     Regular installation with prompts
 #   sudo ./setup.sh --auto              Fully automated installation 
 #   wget -qO- URL | sudo bash -s -- --auto   Remote execution
+#
+# INSTALLED COMPONENTS
+# -------------------
+#
+# System & Development:
+# - Core system utilities and development tools
+# - Docker and Podman container platforms
+# - pyenv Python version manager
+# - mise runtime version manager
+# - Neovim editor with kickstart.nvim config
+# - Lua and LuaRocks
+# - KVM/QEMU virtualization
+#
+# Applications:
+# - Visual Studio Code
+# - JetBrains Toolbox
+# - Google Chrome Beta
+# - 1Password (desktop & CLI)
+# - Steam
+# - Various Flatpak and Snap applications (see arrays for full list)
+#
+# Shell:
+# - Fish shell configured as default
+# - Developer-friendly shell configuration
+#
+# LOGS
+# ----
+#
+# Installation logs are saved to: /tmp/{script-name}_{timestamp}.log
+#
+# MAINTAINER
+# ----------
+#
+# Franklin J. Lee
+# https://github.com/Retrockit/ubuntu-setup
+#
 
 # Exit on error, undefined variables, and pipe failures
 set -euo pipefail
