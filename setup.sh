@@ -81,16 +81,18 @@ readonly FLATPAK_PACKAGES=(
 
 # list of Flatpak apps to install
 readonly FLATPAK_APPS=(
-  "com.spotify.Client"                   # Spotify
-  "org.mozilla.firefox"                  # Firefox
-  "org.videolan.VLC"                     # VLC Media Player
+  "info.smplayer.SMPlayer"               # SMPlayer
   "com.discordapp.Discord"               # Discord
   "com.slack.Slack"                      # Slack
   "org.telegram.desktop"                 # Telegram
-  "com.bitwarden.desktop"                # Bitwarden
   "com.github.tchx84.Flatseal"           # Flatseal (Flatpak permissions manager)
-  "org.gnome.Boxes"                      # GNOME Boxes
   "org.gimp.GIMP"                        # GIMP
+  "it.mijorus.gearlever"                 # Gear Lever
+  "org.duckstation.DuckStation"          # DuckStation
+  "org.DolphinEmu.dolphin-emu"           # Dolphin Emulator
+  "net.pcsx2.PCSX2"                      # PCSX2
+  "io.github.mhogomchungu.media-downloader" # Media Downloader
+  
 )
 
 # Docker packages to install
