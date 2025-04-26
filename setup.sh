@@ -1761,6 +1761,49 @@ install_kvm_libvirt() {
   fi
 }
 
+#######################################
+# Perform final system update and upgrade
+# Globals:
+#   None
+# Arguments:
+#   None
+#######################################
+function perform_final_update() {
+  log "Performing final system update and upgrade"
+  
+  # Update package index
+  log "Updating package repositories one last time"
+  if ! apt-get update; then
+    log "Warning: Final apt update failed, but continuing anyway"
+  fi
+  
+  # Upgrade all packages to their latest versions
+  log "Upgrading all installed packages to their latest versions"
+  if ! apt-get upgrade -y; then
+    log "Warning: Final apt upgrade encountered some issues"
+  fi
+  
+  # Perform dist-upgrade to handle package dependencies properly
+  log "Performing distribution upgrade to handle changed dependencies"
+  if ! apt-get dist-upgrade -y; then
+    log "Warning: Final apt dist-upgrade encountered some issues"
+  fi
+  
+  # Clean up any unnecessary packages
+  log "Removing unnecessary packages"
+  if ! apt-get autoremove -y; then
+    log "Warning: Package autoremoval encountered some issues"
+  fi
+  
+  # Clean up apt cache
+  log "Cleaning apt cache"
+  if ! apt-get clean; then
+    log "Warning: Apt cache cleanup encountered issues"
+  fi
+  
+  log "Final system update and upgrade completed"
+}
+
 
 #######################################
 # Prompt for system restart unless auto mode is enabled
@@ -1927,6 +1970,9 @@ main() {
  
  # Configure fish shell
  configure_fish_shell
+
+ # Perform final system update and upgrade
+ perform_final_update
  
  log "System setup completed successfully"
  log "Note: You may need to log out and back in for the following changes to take effect:"
