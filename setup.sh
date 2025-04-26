@@ -3,7 +3,7 @@
 # Ubuntu System Setup Script
 # ==========================
 #
-# Copyright (c) 2025 Franklin J. Lee
+# Copyright (c) 2025 SolutionMonk
 # MIT License
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
