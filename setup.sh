@@ -241,113 +241,83 @@ update_system() {
 }
 
 #######################################
-# Install snapd if not already installed
+# Install snap core if not already installed
 # Globals:
 #   None
 # Arguments:
 #   None
 #######################################
-install_snapd() {
-  if package_installed "snapd"; then
-    log "snapd package is already installed"
-    return 0
-  fi
-
-  log "Installing snapd"
-  if ! apt-get install -y snapd; then
-    err "Failed to install snapd package"
-  fi
-
-  # Optionally, ensure the service is running, though apt usually handles this
-  log "Waiting briefly for snapd service to initialize..."
-  sleep 5 # Give snapd a moment to start up after installation
-  if systemctl is-active --quiet snapd.service && systemctl is-enabled --quiet snapd.service; then
-     log "snapd service is active and enabled."
+install_snap() {
+  # Check if snapd is already installed
+  if ! command_exists snap; then
+    log "Installing snapd package"
+    apt-get update
+    if ! apt-get install -y snapd; then
+      err "Failed to install snapd"
+    fi
+    
+    # Ensure snap service is running and enabled
+    log "Ensuring snap service is running and enabled"
+    systemctl enable --now snapd.service
+    
+    # Create symbolic link for classic snap support
+    if [ ! -e /snap ]; then
+      ln -s /var/lib/snapd/snap /snap
+    fi
+    
+    log "snapd installed successfully"
   else
-     log "Warning: snapd service might not be running or enabled. Trying to start/enable."
-     systemctl enable --now snapd.service || log "Warning: Failed to enable/start snapd service."
+    log "snapd is already installed"
   fi
-
-  log "snapd installed successfully"
+  
+  # Ensure core snap is installed
+  if ! snap list | grep -q "^core "; then
+    log "Installing core snap"
+    if ! snap install core; then
+      err "Failed to install core snap"
+    fi
+  fi
 }
 
 #######################################
-# Install Snap applications defined in SNAP_APPS
+# Install snap applications for the current user
 # Globals:
 #   SNAP_APPS
 # Arguments:
 #   None
 #######################################
 install_snap_apps() {
-  # Ensure snap command exists. install_snapd should have been called before this.
-  if ! command_exists snap; then
-    # This err call IS intended to stop the script if snap isn't found
-    err "Snap command not found. Ensure snapd is installed correctly."
-    return 1 # Defensive exit code, though err already exits
-  fi
-
-  log "Installing Snap applications specified in SNAP_APPS"
-
-  local app
-  local installed_count=0
-  local failed_count=0
-  local skipped_count=0
-  local install_output # Variable to capture output/errors
-
-  # Handle empty array case gracefully
-  if (( ${#SNAP_APPS[@]} == 0 )); then
-     log "SNAP_APPS array is empty. No snaps to install."
-     return 0 # Successfully did nothing
-  fi
-
-  for app in "${SNAP_APPS[@]}"; do
-    # Check if the snap is already installed
-    if snap list | grep -q "^${app}\s"; then
-      log "Snap package '${app}' is already installed, skipping."
-      ((skipped_count++))
-      continue # Move to the next app
+  log "Installing Snap applications"
+  
+  # Make sure snap is installed before proceeding
+  install_snap
+  
+  # Install each app in the SNAP_APPS array
+  for app_spec in "${SNAP_APPS[@]}"; do
+    # Skip "core" as we already installed it in install_snap
+    if [[ "${app_spec}" == "core" ]]; then
+      continue
     fi
-
-    log "Attempting to install Snap package: ${app}"
-    # Attempt standard install, capture stderr to check for confinement error
-    if ! install_output=$(snap install "${app}" 2>&1); then
-       # Standard install failed, check the output
-       log "Standard install failed for '${app}'. Output: ${install_output}" # Log the reason
-       if echo "${install_output}" | grep -q "requires classic confinement"; then
-          log "'${app}' requires classic confinement. Trying with --classic flag."
-          if ! snap install --classic "${app}"; then
-             log "Warning: Failed to install Snap package '${app}' even with --classic flag."
-             ((failed_count++))
-          else
-             log "Snap package '${app}' installed successfully (using --classic)."
-             ((installed_count++))
-          fi
-       else
-          # Failed for a reason other than needing --classic
-          log "Warning: Failed to install Snap package '${app}' for a non-confinement reason."
-          ((failed_count++))
-       fi
+    
+    # Extract app name (everything before any space)
+    local app_name
+    app_name=$(echo "${app_spec}" | cut -d' ' -f1)
+    
+    # Check if the app is already installed
+    if snap list | grep -q "^${app_name} "; then
+      log "Snap app ${app_name} is already installed"
     else
-       # Standard install SUCCEEDED
-       log "Snap package '${app}' installed successfully."
-       ((installed_count++))
+      log "Installing Snap app: ${app_name}"
+      if ! snap install ${app_spec}; then
+        log "Warning: Failed to install Snap app ${app_name}"
+        # Continue with the next app instead of exiting
+      else
+        log "Snap app ${app_name} installed successfully"
+      fi
     fi
   done
-
-  log "Snap installation summary: ${installed_count} installed, ${failed_count} failed, ${skipped_count} skipped."
-
-  # Explicitly handle the failure of 'snap refresh core'
-  log "Ensuring 'core' snap is up-to-date"
-  if ! snap refresh core; then
-     log "Warning: Failed to refresh 'core' snap. Continuing script execution."
-     # We explicitly DO NOT increment failed_count or exit here, as it's often non-critical
-  fi
-
-  # Do not add an 'err' here based on failed_count unless you WANT the script to stop
-  # if any snap fails. The current logic logs warnings and continues.
-  if (( failed_count > 0 )); then
-    log "Note: Some Snap packages failed to install. Check the log above for details."
-  fi
+  
+  log "Snap applications installation completed"
 }
 
 #######################################
@@ -1645,10 +1615,6 @@ main() {
  log "Installing development packages"
  install_packages "${DEV_PACKAGES[@]}"
 
-  # Install snapd framework (before trying to install snap apps)
-  install_snapd
-
- 
  # Install Neovim from unstable PPA
  install_neovim
 
