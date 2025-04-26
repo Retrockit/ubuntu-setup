@@ -269,136 +269,65 @@ remove_conflicting_packages() {
 #   0 if locks are released, exits with error otherwise
 #######################################
 check_package_locks() {
-  log "Performing thorough check for package management locks"
+  log "Checking for package management locks"
   
   local lock_files=(
-    "/var/lib/dpkg/lock"
     "/var/lib/dpkg/lock-frontend"
-    "/var/lib/apt/lists/lock"
-    "/var/cache/apt/archives/lock"
-    "/var/lib/apt/daily_lock"  # unattended-upgrades lock
-    "/var/lib/aptitude/lock"   # aptitude lock
+    "/var/lib/dpkg/lock"
   )
   
-  local max_wait_time=900      # 15 minutes max wait time
+  local max_wait_time=300  # 5 minutes max wait time
   local start_time=$(date +%s)
-  local retry_interval=5       # seconds between retries
-  local elapsed_time=0
-  
-  # First check if dpkg was interrupted
-  if [ -f "/var/lib/dpkg/updates/available" ]; then
-    log "Found evidence that dpkg was interrupted. Running dpkg --configure -a first"
-    dpkg --configure -a
-  fi
-  
-  # Check if apt-daily.service or apt-daily-upgrade.service are running
-  local apt_services=("apt-daily.service" "apt-daily-upgrade.service" "unattended-upgrades.service")
-  for service in "${apt_services[@]}"; do
-    if systemctl is-active --quiet "$service"; then
-      log "Service $service is running, which may hold package locks"
-      log "Checking status: $(systemctl status "$service" | grep "Active:" | sed 's/^[[:space:]]*//')"
-    fi
-  done
+  local current_time
+  local elapsed_time
   
   while true; do
-    local all_clear=true
-    local locks_held=()
+    local locks_held=false
     
-    # Method 1: Direct file lock checking
-    for lock_file in "${lock_files[@]}"; do
-      if [ -f "$lock_file" ]; then
-        # Try multiple lock detection methods
-        if lsof "$lock_file" >/dev/null 2>&1; then
-          all_clear=false
-          locks_held+=("$lock_file [detected by lsof]")
-        elif fuser "$lock_file" >/dev/null 2>&1; then
-          all_clear=false
-          locks_held+=("$lock_file [detected by fuser]")
-        elif [ -f "$lock_file" ] && [ ! -s "$lock_file" ]; then
-          # Empty lock file - might be stale
-          log "Found empty lock file: $lock_file (possibly stale)"
-        fi
+    # Check if apt or dpkg processes are running (only exact matches)
+    if pgrep -x apt >/dev/null || pgrep -x apt-get >/dev/null || pgrep -x dpkg >/dev/null || pgrep -x unattended-upgrade >/dev/null; then
+      locks_held=true
+      current_time=$(date +%s)
+      elapsed_time=$((current_time - start_time))
+      
+      log "Package management process is running (${elapsed_time}s elapsed)"
+      
+      if [ "$elapsed_time" -gt "$max_wait_time" ]; then
+        log "Timed out after waiting ${max_wait_time} seconds for package processes to complete"
+        log "You may need to manually check running apt/dpkg processes"
+        err "Cannot proceed due to package management locks"
       fi
-    done
-    
-    # Method 2: Check for running package management processes
-    local package_processes=("dpkg" "apt" "apt-get" "aptitude" "synaptic" "unattended" "packagekit")
-    for proc in "${package_processes[@]}"; do
-      if pgrep -f "$proc" >/dev/null; then
-        local pid_list=$(pgrep -f "$proc" | tr '\n' ',' | sed 's/,$//')
-        all_clear=false
-        locks_held+=("Process: $proc (PIDs: $pid_list)")
-      fi
-    done
-    
-    # Method 3: Check process status using ps
-    local apt_processes=$(ps aux | grep -E "apt|dpkg|unattended|synaptic" | grep -v grep)
-    if [ -n "$apt_processes" ]; then
-      log "Detected package management processes running:"
-      echo "$apt_processes" | head -n 3 | while read -r line; do
-        log "  $line"
-      done
-      if [ "$(echo "$apt_processes" | wc -l)" -gt 3 ]; then
-        log "  ... and $(( $(echo "$apt_processes" | wc -l) - 3 )) more"
-      fi
+      
+      log "Waiting 10 seconds for package processes to complete..."
+      sleep 10
+      continue
     fi
     
-    # If all checks passed, we're good to go
-    if [ "$all_clear" = true ]; then
-      log "Package management system is unlocked and available"
+    # Check for actual locks on critical files
+    for lock_file in "${lock_files[@]}"; do
+      if fuser "$lock_file" >/dev/null 2>&1; then
+        locks_held=true
+        current_time=$(date +%s)
+        elapsed_time=$((current_time - start_time))
+        
+        log "Lock on $lock_file detected (${elapsed_time}s elapsed)"
+        
+        if [ "$elapsed_time" -gt "$max_wait_time" ]; then
+          log "Timed out after waiting ${max_wait_time} seconds for lock on $lock_file to be released"
+          err "Cannot proceed due to package management locks"
+        fi
+        
+        log "Waiting 10 seconds for lock to be released..."
+        sleep 10
+        break
+      fi
+    done
+    
+    # If no locks are held, we can proceed
+    if [ "$locks_held" = false ]; then
+      log "Package management system is available"
       return 0
     fi
-    
-    # If we found locks, report and wait
-    current_time=$(date +%s)
-    elapsed_time=$((current_time - start_time))
-    
-    log "Package management system is locked (${elapsed_time}s elapsed)"
-    for lock in "${locks_held[@]}"; do
-      log "  - $lock"
-    done
-    
-    # Check if we've waited too long
-    if [ "$elapsed_time" -gt "$max_wait_time" ]; then
-      log "Timed out after waiting ${max_wait_time} seconds for package locks to be released"
-      
-      # Detailed diagnostics before giving up
-      log "=== LOCK DIAGNOSTICS ==="
-      log "1. Lock files:"
-      for lock_file in "${lock_files[@]}"; do
-        if [ -f "$lock_file" ]; then
-          local file_info=$(ls -la "$lock_file")
-          log "   $file_info"
-          log "   Content size: $(wc -c < "$lock_file") bytes"
-          
-          # Try to identify owners
-          log "   Processes using this file:"
-          lsof "$lock_file" 2>/dev/null || log "     None detected by lsof"
-          fuser -v "$lock_file" 2>/dev/null || log "     None detected by fuser"
-        fi
-      done
-      
-      log "2. Running apt/dpkg processes:"
-      ps aux | grep -E 'apt|dpkg|unattended' | grep -v grep || log "  None found"
-      
-      log "3. System package service status:"
-      for service in "${apt_services[@]}"; do
-        log "   $service: $(systemctl is-active "$service" 2>/dev/null || echo "unknown")"
-      done
-      
-      # Advice on how to handle the situation
-      log "=== RECOMMENDATIONS ==="
-      log "You may try one of the following approaches:"
-      log "1. Wait for package operations to complete"
-      log "2. If you're certain no package operations are running:"
-      log "   - Investigate with 'sudo lsof | grep /var/lib/dpkg/lock'"
-      log "   - Consider manual intervention: 'sudo dpkg --configure -a'"
-      
-      err "Cannot proceed due to package management locks"
-    fi
-    
-    log "Waiting ${retry_interval} seconds for locks to be released..."
-    sleep "$retry_interval"
   done
 }
 
