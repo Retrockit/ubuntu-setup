@@ -1030,22 +1030,26 @@ install_crun() {
 # Arguments:
 #   None
 #######################################
+#######################################
+# Configure Podman policy.json and registries
+# Globals:
+#   CONTAINERS_REGISTRIES_CONF
+# Arguments:
+#   None
+#######################################
 configure_podman() {
- local current_user
- current_user=$(logname 2>/dev/null || echo "${SUDO_USER:-$USER}")
- local config_dir="/home/${current_user}/.config/containers"
- local policy_file="${config_dir}/policy.json"
+ local system_config_dir="/etc/containers"
+ local policy_file="${system_config_dir}/policy.json"
  
- # Create containers config directory if it doesn't exist
- if [ ! -d "${config_dir}" ]; then
-   log "Creating containers config directory"
-   mkdir -p "${config_dir}"
-   chown "${current_user}:${current_user}" "${config_dir}"
+ # Create system-wide containers config directory if it doesn't exist
+ if [ ! -d "${system_config_dir}" ]; then
+   log "Creating system-wide containers config directory: ${system_config_dir}"
+   mkdir -p "${system_config_dir}"
  fi
  
- # Create policy.json if it doesn't exist
+ # Create system-wide policy.json if it doesn't exist
  if [ ! -f "${policy_file}" ]; then
-   log "Creating Podman policy.json file"
+   log "Creating system-wide Podman policy.json file at ${policy_file}"
    cat > "${policy_file}" << 'EOF'
 {
  "default": [
@@ -1055,19 +1059,14 @@ configure_podman() {
  ]
 }
 EOF
-   chown "${current_user}:${current_user}" "${policy_file}"
-   log "Podman policy.json created at ${policy_file}"
+   # Ownership should be root:root by default when run with sudo
+   log "System-wide Podman policy.json created at ${policy_file}"
  else
-   log "Podman policy.json already exists at ${policy_file}"
+   log "System-wide Podman policy.json already exists at ${policy_file}"
  fi
  
- # Configure unqualified search registries
- log "Configuring Podman unqualified search registries"
- 
- # Create containers directory if it doesn't exist
- if [ ! -d "/etc/containers" ]; then
-   mkdir -p /etc/containers
- fi
+ # Configure unqualified search registries (remains system-wide)
+ log "Configuring Podman unqualified search registries in ${CONTAINERS_REGISTRIES_CONF}"
  
  # Add unqualified search registries configuration if not already present
  if [ -f "${CONTAINERS_REGISTRIES_CONF}" ]; then
@@ -1090,6 +1089,7 @@ EOF
    log "Skipping Podman verification as it doesn't appear to be installed correctly"
  fi
 }
+
 
 #######################################
 # Install 1Password desktop and CLI
