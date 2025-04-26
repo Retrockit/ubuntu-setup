@@ -318,8 +318,8 @@ function install_steam_dependencies() {
     apt-get update
   fi
   
-  # List of Steam dependencies
-  local steam_deps=(
+  # List of Steam dependencies - core dependencies
+  local steam_core_deps=(
     "libc6:amd64"
     "libc6:i386"
     "libegl1:amd64"
@@ -332,13 +332,185 @@ function install_steam_dependencies() {
     "libgl1:i386"
   )
   
-  # Install dependencies
-  log "Installing Steam dependencies: ${steam_deps[*]}"
-  if ! apt-get install -y "${steam_deps[@]}"; then
-    log "Warning: Some Steam dependencies may not have installed correctly"
-    # Continue anyway, as Steam will try to install its dependencies
+  # Video acceleration and rendering dependencies
+  local steam_video_deps=(
+    "i965-va-driver"
+    "i965-va-driver:i386"
+    "intel-media-va-driver"
+    "intel-media-va-driver:i386"
+    "libigdgmm12"
+    "libigdgmm12:i386"
+    "libva-drm2:i386"
+    "libva-glx2"
+    "libva-glx2:i386"
+    "libva-x11-2:i386"
+    "libva2:i386"
+    "libvdpau1:i386"
+    "mesa-va-drivers"
+    "mesa-va-drivers:i386"
+    "mesa-vdpau-drivers:i386"
+    "va-driver-all"
+    "va-driver-all:i386"
+    "vdpau-driver-all:i386"
+    "ocl-icd-libopencl1:i386"
+  )
+  
+  # Audio-related dependencies
+  local steam_audio_deps=(
+    "libasound2-plugins"
+    "libasound2-plugins:i386"
+    "libasound2t64:i386"
+    "libasyncns0:i386"
+    "libflac14:i386"
+    "libjack-jackd2-0:i386"
+    "libmpg123-0t64:i386"
+    "libogg0:i386"
+    "libpulse0:i386"
+    "libsamplerate0:i386"
+    "libsndfile1:i386"
+    "libsoxr0:i386"
+    "libspeex1:i386"
+    "libspeexdsp1:i386"
+    "libvorbis0a:i386"
+    "libvorbisenc2:i386"
+  )
+  
+  # Video codec dependencies
+  local steam_codec_deps=(
+    "libaom3:i386"
+    "libavcodec61:i386"
+    "libavutil59:i386"
+    "libcodec2-1.2:i386"
+    "libdav1d7:i386"
+    "libgsm1:i386"
+    "libmp3lame0:i386"
+    "libopus0:i386"
+    "libshine3:i386"
+    "libsharpyuv0:i386"
+    "libsnappy1v5:i386"
+    "libsvtav1enc2:i386"
+    "libswresample5:i386"
+    "libtheoradec1:i386"
+    "libtheoraenc1:i386"
+    "libtwolame0:i386"
+    "libvpx9:i386"
+    "libwebp7:i386"
+    "libwebpmux3:i386"
+    "libx264-164:i386"
+    "libx265-215:i386"
+    "libxvidcore4:i386"
+    "libzvbi0t64:i386"
+  )
+  
+  # Graphics and rendering dependencies
+  local steam_graphics_deps=(
+    "libcairo-gobject2:i386"
+    "libcairo2:i386"
+    "libfontconfig1:i386"
+    "libfreetype6:i386"
+    "libgdk-pixbuf-2.0-0:i386"
+    "libharfbuzz0b:i386"
+    "libjbig0:i386"
+    "libjpeg-turbo8:i386"
+    "libjpeg8:i386"
+    "libopenjp2-7:i386"
+    "libpango-1.0-0:i386"
+    "libpangocairo-1.0-0:i386"
+    "libpangoft2-1.0-0:i386"
+    "libpixman-1-0:i386"
+    "libpng16-16t64:i386"
+    "librsvg2-2:i386"
+    "librsvg2-common:i386"
+    "libtiff6:i386"
+    "libxcb-render0:i386"
+    "libxrender1:i386"
+  )
+  
+  # System and misc dependencies
+  local steam_system_deps=(
+    "libapparmor1:i386"
+    "libblkid1:i386"
+    "libbrotli1:i386"
+    "libbz2-1.0:i386"
+    "libcap2:i386"
+    "libcrypt1:i386"
+    "libdatrie1:i386"
+    "libdb5.3t64:i386"
+    "libdbus-1-3:i386"
+    "libdeflate0:i386"
+    "libfribidi0:i386"
+    "libglib2.0-0t64:i386"
+    "libgmp10:i386"
+    "libgnutls30t64:i386"
+    "libgomp1:i386"
+    "libgpg-error0:i386"
+    "libgraphite2-3:i386"
+    "libhogweed6t64:i386"
+    "libmount1:i386"
+    "libnettle8t64:i386"
+    "libnm0:i386"
+    "libnuma1:i386"
+    "libp11-kit0:i386"
+    "libpcre2-8-0:i386"
+    "libselinux1:i386"
+    "libsystemd0:i386"
+    "libtasn1-6:i386"
+    "libthai0:i386"
+    "libudev1:i386"
+    "libxcb-xkb1:i386"
+    "libxfixes3:i386"
+    "libxinerama1:i386"
+    "libxkbcommon-x11-0:i386"
+    "libxkbcommon0:i386"
+    "libxss1:i386"
+  )
+  
+  # Combine all dependency arrays
+  local all_steam_deps=(
+    "${steam_core_deps[@]}"
+    "${steam_video_deps[@]}"
+    "${steam_audio_deps[@]}"
+    "${steam_codec_deps[@]}"
+    "${steam_graphics_deps[@]}"
+    "${steam_system_deps[@]}"
+  )
+  
+  # Install dependencies in groups
+  log "Installing Steam core dependencies"
+  apt-get install -y "${steam_core_deps[@]}" || log "Warning: Some core dependencies may have failed"
+  
+  log "Installing Steam video dependencies"
+  apt-get install -y "${steam_video_deps[@]}" || log "Warning: Some video dependencies may have failed"
+  
+  log "Installing Steam audio dependencies"
+  apt-get install -y "${steam_audio_deps[@]}" || log "Warning: Some audio dependencies may have failed"
+  
+  log "Installing Steam codec dependencies"
+  apt-get install -y "${steam_codec_deps[@]}" || log "Warning: Some codec dependencies may have failed"
+  
+  log "Installing Steam graphics dependencies"
+  apt-get install -y "${steam_graphics_deps[@]}" || log "Warning: Some graphics dependencies may have failed"
+  
+  log "Installing Steam system dependencies"
+  apt-get install -y "${steam_system_deps[@]}" || log "Warning: Some system dependencies may have failed"
+  
+  # Verify installation
+  local missing_deps=()
+  for dep in "${all_steam_deps[@]}"; do
+    # Extract package name without architecture specifier
+    local pkg_name
+    pkg_name=$(echo "${dep}" | cut -d':' -f1)
+    
+    if ! package_installed "${pkg_name}"; then
+      missing_deps+=("${dep}")
+    fi
+  done
+  
+  if [ ${#missing_deps[@]} -eq 0 ]; then
+    log "All Steam dependencies installed successfully"
   else
-    log "Steam dependencies installed successfully"
+    log "Warning: The following Steam dependencies may not have installed correctly: ${missing_deps[*]}"
+    log "Continuing with Steam installation anyway, as these might be installed during the Steam setup"
   fi
 }
 
