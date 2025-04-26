@@ -89,9 +89,8 @@ readonly UTIL_PACKAGES=(
 
 # List of Snap apps to install
 readonly SNAP_APPS=(
-    "postman"  # API Development Environment
-    "obs-studio" # OBS Studio Installation
-    "Helix"
+  #  "postman"  # API Development Environment
+  #  "obs-studio" # OBS Studio Installation
   # "spotify"  # Music Streaming
   # Add other desired snap packages here
   # "code"   # Example: VS Code (consider conflicts if installing via .deb too)
@@ -300,6 +299,62 @@ function install_snap_apps() {
   done
   
   log "Snap applications installation completed"
+}
+
+#######################################
+# Install Steam
+# Globals:
+#   None
+# Arguments:
+#   None
+#######################################
+function install_steam() {
+  local steam_deb="/tmp/steam.deb"
+  local steam_url="https://cdn.fastly.steamstatic.com/client/installer/steam.deb"
+  
+  # Check if Steam is already installed
+  if package_installed "steam" || package_installed "steam-launcher"; then
+    log "Steam is already installed"
+    return 0
+  fi
+  
+  log "Installing Steam"
+  
+  # Enable multi-arch support if not already enabled
+  if [ "$(dpkg --print-foreign-architectures | grep -c i386)" -eq 0 ]; then
+    log "Enabling i386 architecture support"
+    dpkg --add-architecture i386
+    apt-get update
+  fi
+  
+  # Download the Steam package
+  log "Downloading Steam package"
+  if ! wget -q -O "${steam_deb}" "${steam_url}"; then
+    err "Failed to download Steam package"
+  fi
+  
+  # Install the package
+  log "Installing Steam package"
+  if ! dpkg -i "${steam_deb}"; then
+    # If there are dependency issues, try to fix them
+    log "Fixing dependencies"
+    apt-get install -f -y
+    
+    # Try the installation again
+    if ! dpkg -i "${steam_deb}"; then
+      err "Failed to install Steam package"
+    fi
+  fi
+  
+  # Clean up the downloaded package
+  rm -f "${steam_deb}"
+  
+  # Verify the installation
+  if package_installed "steam" || package_installed "steam-launcher"; then
+    log "Steam installed successfully"
+  else
+    log "Warning: Steam installation may have failed. Please verify manually."
+  fi
 }
 
 #######################################
@@ -1619,6 +1674,9 @@ main() {
  # Install Google Chrome Beta
  install_chrome_beta
 
+ # Install Steam
+ install_steam
+
  # Install 1Password
  install_1password
  
@@ -1629,7 +1687,7 @@ main() {
  install_flatpak_apps
 
  # Install Snap apps
-  install_snap_apps
+ install_snap_apps
  
  # Remove conflicting Docker packages
  remove_conflicting_packages
