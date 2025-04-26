@@ -5,6 +5,19 @@
 # This script automates the installation of commonly used tools on Ubuntu 24.10+.
 # It is designed to be idempotent and maintainable, allowing easy addition and 
 # removal of tools.
+#
+# Copyright 2023 Your Name
+# License: MIT
+#
+# Usage:
+#   ./setup.sh              Run interactively
+#   ./setup.sh --auto       Run in automatic mode (no prompts)
+#   ./setup.sh --help       Show usage information
+#   
+# Examples:
+#   sudo ./setup.sh                     Regular installation with prompts
+#   sudo ./setup.sh --auto              Fully automated installation 
+#   wget -qO- URL | sudo bash -s -- --auto   Remote execution
 
 # Exit on error, undefined variables, and pipe failures
 set -euo pipefail
