@@ -862,48 +862,95 @@ configure_docker_post_install() {
 }
 
 #######################################
-# Install Visual Studio Code
+# Install Visual Studio Code with retry mechanism
 # Globals:
 #   VSCODE_KEYRING
 #   VSCODE_SOURCE_LIST
 # Arguments:
 #   None
+# Returns:
+#   0 if successful, non-zero on error
 #######################################
 install_vscode() {
- if command_exists code; then
-   log "Visual Studio Code is already installed"
-   return 0
- fi
+  if command_exists code; then
+    log "Visual Studio Code is already installed"
+    return 0
+  fi
 
- log "Installing Visual Studio Code"
- 
- # Set Microsoft repo preference automatically
- log "Setting VS Code repository preference"
- echo "code code/add-microsoft-repo boolean true" | debconf-set-selections
- 
- # Install dependencies
- apt-get install -y wget gpg apt-transport-https
- 
- # Create directory for Microsoft keyring if it doesn't exist
- install -m 0755 -d /etc/apt/keyrings
- 
- # Add Microsoft GPG key
- log "Adding Microsoft GPG key"
- wget -qO- https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor > packages.microsoft.gpg
- install -D -o root -g root -m 644 packages.microsoft.gpg "${VSCODE_KEYRING}"
- 
- # Add VS Code repository
- log "Adding VS Code repository"
- echo "deb [arch=$(dpkg --print-architecture) signed-by=${VSCODE_KEYRING}] https://packages.microsoft.com/repos/code stable main" | tee "${VSCODE_SOURCE_LIST}" > /dev/null
- 
- # Clean up
- rm -f packages.microsoft.gpg
- 
- # Update package cache and install VS Code
- apt-get update
- apt-get install -y code
- 
- log "Visual Studio Code has been installed successfully"
+  log "Installing Visual Studio Code"
+  
+  # Set Microsoft repo preference automatically
+  log "Setting VS Code repository preference"
+  echo "code code/add-microsoft-repo boolean true" | debconf-set-selections
+  
+  # Install dependencies
+  apt-get install -y wget gpg apt-transport-https
+  
+  # Create directory for Microsoft keyring if it doesn't exist
+  install -m 0755 -d /etc/apt/keyrings
+  
+  # Add Microsoft GPG key - use a temporary file with full path
+  local temp_gpg_file="/tmp/packages.microsoft.gpg"
+  log "Adding Microsoft GPG key"
+  
+  # Retry logic for downloading GPG key
+  local max_attempts=3
+  local attempt=1
+  local success=false
+  
+  while (( attempt <= max_attempts )) && [ "$success" = false ]; do
+    log "Attempt ${attempt}/${max_attempts} to download Microsoft GPG key"
+    if wget -qO- https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor > "${temp_gpg_file}"; then
+      if [ -s "${temp_gpg_file}" ]; then  # Check if file exists and is not empty
+        success=true
+        log "Successfully downloaded Microsoft GPG key"
+      else
+        log "GPG key file is empty, retrying..."
+      fi
+    else
+      log "Failed to download Microsoft GPG key, retrying..."
+    fi
+    
+    if [ "$success" = false ]; then
+      if (( attempt < max_attempts )); then
+        log "Waiting 5 seconds before retry..."
+        sleep 5
+      fi
+      (( attempt++ ))
+    fi
+  done
+  
+  if [ "$success" = false ]; then
+    err "Failed to download Microsoft GPG key after ${max_attempts} attempts"
+  fi
+  
+  # Install GPG key
+  if ! install -D -o root -g root -m 644 "${temp_gpg_file}" "${VSCODE_KEYRING}"; then
+    rm -f "${temp_gpg_file}"
+    err "Failed to install Microsoft GPG key"
+  fi
+  
+  # Add VS Code repository
+  log "Adding VS Code repository"
+  echo "deb [arch=$(dpkg --print-architecture) signed-by=${VSCODE_KEYRING}] https://packages.microsoft.com/repos/code stable main" | \
+    tee "${VSCODE_SOURCE_LIST}" > /dev/null
+  
+  # Clean up
+  rm -f "${temp_gpg_file}"
+  
+  # Update package cache and install VS Code
+  log "Updating package cache"
+  if ! apt-get update; then
+    err "Failed to update package cache"
+  fi
+  
+  log "Installing Visual Studio Code"
+  if ! apt-get install -y code; then
+    err "Failed to install Visual Studio Code"
+  fi
+  
+  log "Visual Studio Code has been installed successfully"
+  return 0
 }
 
 #######################################
