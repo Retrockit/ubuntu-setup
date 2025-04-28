@@ -12,6 +12,12 @@ Run this command to automatically set up your Ubuntu system:
 wget -qO- "https://raw.githubusercontent.com/Retrockit/ubuntu-setup/refs/heads/main/setup.sh" | sudo bash -s -- --auto
 ```
 
+Or use shortened link version
+
+```bash
+wget -qO- "https://bit.ly/ubtusetup" | sudo bash -s -- --auto
+```
+
 This will install and configure everything with default settings, no interaction required.
 
 ## 📋 What Does It Install?
