@@ -971,10 +971,28 @@ install_powershell() {
 
   log "Installing PowerShell from GitHub releases"
   
-  # Determine the system architecture
+  # Determine the system architecture and map it to PowerShell's naming convention
   local arch
   arch=$(dpkg --print-architecture)
-  log "Detected system architecture: ${arch}"
+  local powershell_arch
+  
+  # Map Debian/Ubuntu architecture names to PowerShell's naming convention
+  case "${arch}" in
+    amd64)
+      powershell_arch="x64"
+      ;;
+    arm64)
+      powershell_arch="arm64"
+      ;;
+    armhf)
+      powershell_arch="arm32"
+      ;;
+    *)
+      err "Unsupported architecture for PowerShell: ${arch}"
+      ;;
+  esac
+  
+  log "Detected system architecture: ${arch} (PowerShell architecture: ${powershell_arch})"
   
   # Define installation paths
   local install_dir="/opt/microsoft/powershell/7"
@@ -982,25 +1000,69 @@ install_powershell() {
   local pwsh_symlink="/usr/bin/pwsh"
   local temp_tarball="/tmp/powershell.tar.gz"
   
-  # Get the latest PowerShell version number
+  # Get the latest PowerShell version number with retry mechanism
   log "Fetching latest PowerShell version"
-  local pwsh_version
-  pwsh_version=$(curl -s https://api.github.com/repos/PowerShell/PowerShell/releases/latest | grep 'tag_name' | cut -d '"' -f 4 | sed 's/v//')
+  local max_attempts=3
+  local attempt=1
+  local pwsh_version=""
+  
+  while (( attempt <= max_attempts )) && [ -z "${pwsh_version}" ]; do
+    log "Attempt ${attempt}/${max_attempts} to fetch PowerShell version"
+    pwsh_version=$(curl -s https://api.github.com/repos/PowerShell/PowerShell/releases/latest | grep 'tag_name' | cut -d '"' -f 4 | sed 's/v//')
+    
+    if [ -n "${pwsh_version}" ]; then
+      log "Latest PowerShell version: ${pwsh_version}"
+      break
+    else
+      log "Failed to determine PowerShell version, retrying..."
+      if (( attempt < max_attempts )); then
+        sleep 5
+      fi
+      (( attempt++ ))
+    fi
+  done
   
   if [ -z "${pwsh_version}" ]; then
-    err "Failed to determine latest PowerShell version"
+    err "Failed to determine latest PowerShell version after ${max_attempts} attempts"
   fi
   
-  log "Latest PowerShell version: ${pwsh_version}"
-  
-  # Construct download URL
-  local download_url="https://github.com/PowerShell/PowerShell/releases/download/v${pwsh_version}/powershell-${pwsh_version}-linux-${arch}.tar.gz"
+  # Construct download URL with the correct architecture
+  local download_url="https://github.com/PowerShell/PowerShell/releases/download/v${pwsh_version}/powershell-${pwsh_version}-linux-${powershell_arch}.tar.gz"
   log "Download URL: ${download_url}"
   
-  # Download PowerShell tarball
+  # Download PowerShell tarball with retry mechanism
   log "Downloading PowerShell tarball"
-  if ! curl -L -o "${temp_tarball}" "${download_url}"; then
-    err "Failed to download PowerShell tarball"
+  attempt=1
+  local download_success=false
+  
+  while (( attempt <= max_attempts )) && [ "${download_success}" = false ]; do
+    log "Attempt ${attempt}/${max_attempts} to download PowerShell tarball"
+    if curl -L -o "${temp_tarball}" "${download_url}" && [ -s "${temp_tarball}" ]; then
+      # Check if file is a valid gzip archive
+      if gzip -t "${temp_tarball}" 2>/dev/null; then
+        download_success=true
+        log "Successfully downloaded PowerShell tarball"
+      else
+        log "Downloaded file is not a valid gzip archive, retrying..."
+        rm -f "${temp_tarball}"
+      fi
+    else
+      log "Failed to download PowerShell tarball, retrying..."
+      rm -f "${temp_tarball}" 2>/dev/null || true
+    fi
+    
+    if [ "${download_success}" = false ]; then
+      if (( attempt < max_attempts )); then
+        log "Waiting 5 seconds before retry..."
+        sleep 5
+      fi
+      (( attempt++ ))
+    fi
+  done
+  
+  if [ "${download_success}" = false ]; then
+    rm -f "${temp_tarball}" 2>/dev/null || true
+    err "Failed to download PowerShell tarball after ${max_attempts} attempts"
   fi
   
   # Create the installation directory if it doesn't exist
