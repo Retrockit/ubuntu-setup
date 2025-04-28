@@ -954,9 +954,8 @@ install_vscode() {
 }
 
 #######################################
-# Install PowerShell with version detection and fallback
-# Uses /etc/os-release to determine Ubuntu version
-# Falls back to known versions if specific version not available
+# Install PowerShell from GitHub releases
+# Downloads the latest version directly as a tarball
 # Globals:
 #   None
 # Arguments:
@@ -970,103 +969,83 @@ install_powershell() {
     return 0
   fi
 
-  log "Installing PowerShell"
+  log "Installing PowerShell from GitHub releases"
   
-  # Get Ubuntu version from os-release file
-  local os_version_id=""
-  if [ -f /etc/os-release ]; then
-    # shellcheck source=/dev/null
-    . /etc/os-release
-    os_version_id="${VERSION_ID}"
-    log "Detected Ubuntu version: ${os_version_id}"
-  else
-    log "Could not detect Ubuntu version, will use fallback versions"
+  # Determine the system architecture
+  local arch
+  arch=$(dpkg --print-architecture)
+  log "Detected system architecture: ${arch}"
+  
+  # Define installation paths
+  local install_dir="/opt/microsoft/powershell/7"
+  local pwsh_binary="${install_dir}/pwsh"
+  local pwsh_symlink="/usr/bin/pwsh"
+  local temp_tarball="/tmp/powershell.tar.gz"
+  
+  # Get the latest PowerShell version number
+  log "Fetching latest PowerShell version"
+  local pwsh_version
+  pwsh_version=$(curl -s https://api.github.com/repos/PowerShell/PowerShell/releases/latest | grep 'tag_name' | cut -d '"' -f 4 | sed 's/v//')
+  
+  if [ -z "${pwsh_version}" ]; then
+    err "Failed to determine latest PowerShell version"
   fi
-
-  # Define fallback versions in order of preference
-  local fallback_versions=("24.10" "24.04" "23.10" "23.04" "22.04")
   
-  # Add detected version to beginning of array if it exists
-  if [ -n "${os_version_id}" ]; then
-    # Create a new array with detected version first
-    local versions=("${os_version_id}")
-    versions+=("${fallback_versions[@]}")
-  else
-    local versions=("${fallback_versions[@]}")
+  log "Latest PowerShell version: ${pwsh_version}"
+  
+  # Construct download URL
+  local download_url="https://github.com/PowerShell/PowerShell/releases/download/v${pwsh_version}/powershell-${pwsh_version}-linux-${arch}.tar.gz"
+  log "Download URL: ${download_url}"
+  
+  # Download PowerShell tarball
+  log "Downloading PowerShell tarball"
+  if ! curl -L -o "${temp_tarball}" "${download_url}"; then
+    err "Failed to download PowerShell tarball"
   fi
-
-  # Temporary directory for package download
-  local temp_dir="/tmp/powershell_install"
-  mkdir -p "${temp_dir}"
-  local package_path="${temp_dir}/packages-microsoft-prod.deb"
   
-  # Try each version until one works
-  local success=false
-  local attempted_versions=()
+  # Create the installation directory if it doesn't exist
+  log "Creating installation directory"
+  mkdir -p "${install_dir}"
   
-  for version in "${versions[@]}"; do
-    # Skip if we've already tried this version
-    if [[ " ${attempted_versions[*]} " == *" ${version} "* ]]; then
-      continue
-    fi
-    
-    attempted_versions+=("${version}")
-    local repo_url="https://packages.microsoft.com/config/ubuntu/${version}/packages-microsoft-prod.deb"
-    
-    log "Attempting to download PowerShell package for Ubuntu ${version}"
-    if wget -q --show-progress -O "${package_path}" "${repo_url}"; then
-      # Check if file is a valid package
-      if dpkg-deb -I "${package_path}" >/dev/null 2>&1; then
-        log "Successfully downloaded PowerShell package for Ubuntu ${version}"
-        success=true
-        break
-      else
-        log "Downloaded file is not a valid package, trying next version"
-        rm -f "${package_path}"
-      fi
-    else
-      log "Failed to download package for Ubuntu ${version}, trying next version"
-    fi
-  done
-
-  if [ "${success}" = false ]; then
-    rm -rf "${temp_dir}"
-    err "Failed to download PowerShell package after trying all available versions"
+  # Extract the tarball to the installation directory
+  log "Extracting PowerShell tarball"
+  if ! tar zxf "${temp_tarball}" -C "${install_dir}"; then
+    rm -f "${temp_tarball}"
+    err "Failed to extract PowerShell tarball"
   fi
-
-  # Install the package
-  log "Installing Microsoft repository package"
-  if ! dpkg -i "${package_path}"; then
-    # If installation fails, try fixing dependencies
-    log "Fixing dependencies"
-    apt-get install -f -y
-    # Try again
-    if ! dpkg -i "${package_path}"; then
-      rm -rf "${temp_dir}"
-      err "Failed to install Microsoft repository package"
+  
+  # Make pwsh executable
+  log "Setting executable permissions"
+  if ! chmod +x "${pwsh_binary}"; then
+    rm -f "${temp_tarball}"
+    err "Failed to set executable permissions on pwsh binary"
+  fi
+  
+  # Remove the existing symlink if one exists
+  if [ -e "${pwsh_symlink}" ] || [ -L "${pwsh_symlink}" ]; then
+    log "Removing existing pwsh symlink"
+    if ! rm "${pwsh_symlink}"; then
+      rm -f "${temp_tarball}"
+      err "Failed to remove existing pwsh symlink"
     fi
   fi
-
-  # Clean up the downloaded package
-  rm -rf "${temp_dir}"
-
-  # Update packages list
-  log "Updating package lists"
-  if ! apt-get update; then
-    err "Failed to update package lists"
+  
+  # Create a new symlink for pwsh
+  log "Creating pwsh symlink"
+  if ! ln -s "${pwsh_binary}" "${pwsh_symlink}"; then
+    rm -f "${temp_tarball}"
+    err "Failed to create pwsh symlink"
   fi
-
-  # Install PowerShell
-  log "Installing PowerShell"
-  if ! apt-get install -y powershell; then
-    err "Failed to install PowerShell"
-  fi
-
+  
+  # Clean up by removing the downloaded tarball
+  log "Cleaning up downloaded tarball"
+  rm -f "${temp_tarball}"
+  
   # Verify installation
   if command_exists pwsh; then
-    local version
-    version=$(pwsh --version)
-    log "PowerShell ${version} has been installed successfully"
+    local installed_version
+    installed_version=$(pwsh --version | head -n 1)
+    log "PowerShell has been installed successfully: ${installed_version}"
     return 0
   else
     err "PowerShell installation verification failed"
